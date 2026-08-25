@@ -1,13 +1,31 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
+if TYPE_CHECKING:
+    from app.models.product import Product
+
 
 class Cart(Base):
     __tablename__ = "carts"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            name="uq_carts_user_id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -17,7 +35,6 @@ class Cart(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
         nullable=False,
-        unique=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -42,6 +59,18 @@ class Cart(Base):
 class CartItem(Base):
     __tablename__ = "cart_items"
 
+    __table_args__ = (
+        CheckConstraint(
+            "quantity > 0",
+            name="ck_cart_items_quantity_positive",
+        ),
+        UniqueConstraint(
+            "cart_id",
+            "product_id",
+            name="uq_cart_item_cart_product",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(
         Integer,
         primary_key=True,
@@ -64,4 +93,8 @@ class CartItem(Base):
 
     cart: Mapped["Cart"] = relationship(
         back_populates="items",
+    )
+
+    product: Mapped["Product"] = relationship(
+        back_populates="cart_items",
     )
