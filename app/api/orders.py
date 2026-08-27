@@ -98,11 +98,14 @@ def create_order(
             detail="Cart is empty",
         )
 
-    # 3. Validate products and stock
+    # 3. Load and lock all products needed by this order
+    products = {}
+
     for cart_item in cart_items:
         product = (
             db.query(Product)
             .filter(Product.id == cart_item.product_id)
+            .with_for_update()
             .first()
         )
 
@@ -124,15 +127,13 @@ def create_order(
                 detail=f"Insufficient stock for product {product.id}",
             )
 
+        products[product.id] = product
+
     # 4. Calculate total
     total_amount = Decimal("0.00")
 
     for cart_item in cart_items:
-        product = (
-            db.query(Product)
-            .filter(Product.id == cart_item.product_id)
-            .first()
-        )
+        product = products[cart_item.product_id]
 
         total_amount += product.price * cart_item.quantity
 
@@ -148,11 +149,7 @@ def create_order(
 
     # 6. Create order items and decrease inventory
     for cart_item in cart_items:
-        product = (
-            db.query(Product)
-            .filter(Product.id == cart_item.product_id)
-            .first()
-        )
+        product = products[cart_item.product_id]
 
         order_item = OrderItem(
             order_id=order.id,
@@ -175,6 +172,7 @@ def create_order(
     db.refresh(order)
 
     return order
+
 
 @router.patch(
     "/{order_id}/status",
