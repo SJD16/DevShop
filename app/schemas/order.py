@@ -3,7 +3,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.order import OrderStatus
 
+class OrderStatusUpdate(BaseModel):
+    status: OrderStatus
+    
 class OrderItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -18,7 +22,7 @@ class OrderResponse(BaseModel):
 
     id: int
     user_id: int
-    status: str
+    status: OrderStatus
     total_amount: Decimal
     created_at: datetime
     updated_at: datetime
