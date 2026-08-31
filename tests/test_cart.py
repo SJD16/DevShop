@@ -339,3 +339,70 @@ def test_delete_cart_item(
     assert cart_response.status_code == 200
     assert cart_response.json()["items"] == []
 
+
+
+def test_unauthenticated_user_cannot_get_cart():
+    response = client.get("/cart")
+
+    assert response.status_code == 401
+
+
+def test_unauthenticated_user_cannot_add_to_cart(test_product):
+    response = client.post(
+        "/cart/items",
+        json={
+            "product_id": test_product.id,
+            "quantity": 1,
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_unauthenticated_user_cannot_update_cart_item(
+    customer_client,
+    test_product,
+):
+    add_response = customer_client.post(
+        "/cart/items",
+        json={
+            "product_id": test_product.id,
+            "quantity": 1,
+        },
+    )
+
+    assert add_response.status_code == 201
+
+    item_id = add_response.json()["id"]
+
+    response = client.patch(
+        f"/cart/items/{item_id}",
+        json={
+            "quantity": 2,
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_unauthenticated_user_cannot_delete_cart_item(
+    customer_client,
+    test_product,
+):
+    add_response = customer_client.post(
+        "/cart/items",
+        json={
+            "product_id": test_product.id,
+            "quantity": 1,
+        },
+    )
+
+    assert add_response.status_code == 201
+
+    item_id = add_response.json()["id"]
+
+    response = client.delete(
+        f"/cart/items/{item_id}"
+    )
+
+    assert response.status_code == 401

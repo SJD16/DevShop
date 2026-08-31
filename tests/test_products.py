@@ -459,3 +459,70 @@ def test_admin_can_deactivate_product(admin_client):
 
     assert data["id"] == product_id
     assert data["is_active"] is False
+
+
+def test_inactive_product_is_not_returned_in_product_list(
+    admin_client,
+):
+    create_response = admin_client.post(
+        "/products",
+        json={
+            "name": "Inactive List Product",
+            "description": "Should not appear in public product listing",
+            "price": 25.00,
+            "stock_quantity": 10,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    product_id = create_response.json()["id"]
+
+    update_response = admin_client.patch(
+        f"/products/{product_id}",
+        json={
+            "is_active": False,
+        },
+    )
+
+    assert update_response.status_code == 200
+
+    response = client.get("/products")
+
+    assert response.status_code == 200
+
+    products = response.json()
+
+    assert all(product["id"] != product_id for product in products)
+
+
+def test_inactive_product_is_not_returned_by_id(
+    admin_client,
+):
+    create_response = admin_client.post(
+        "/products",
+        json={
+            "name": "Inactive Detail Product",
+            "description": "Should not be publicly accessible",
+            "price": 30.00,
+            "stock_quantity": 10,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    product_id = create_response.json()["id"]
+
+    update_response = admin_client.patch(
+        f"/products/{product_id}",
+        json={
+            "is_active": False,
+        },
+    )
+
+    assert update_response.status_code == 200
+
+    response = client.get(f"/products/{product_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Product not found"

@@ -14,7 +14,11 @@ router = APIRouter(
 
 @router.get("", response_model=list[ProductResponse])
 def get_products(db: Session = Depends(get_db)):
-    products = db.query(Product).all()
+    products = (
+        db.query(Product)
+        .filter(Product.is_active.is_(True))
+        .all()
+    )
 
     return products
 
@@ -43,7 +47,14 @@ def create_product(
 
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = (
+        db.query(Product)
+        .filter(
+            Product.id == product_id,
+            Product.is_active.is_(True),
+        )
+        .first()
+    )
 
     if product is None:
         raise HTTPException(
