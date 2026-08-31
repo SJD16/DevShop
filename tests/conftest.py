@@ -7,6 +7,7 @@ from app.core.security import hash_password
 from app.models.user import User
 from app.core.security import create_access_token
 from fastapi.testclient import TestClient
+from app.models.product import Product
 
 from app.database import get_db
 from app.main import app
@@ -87,6 +88,45 @@ def test_customer():
     finally:
         db.close()
 
+@pytest.fixture
+def test_customer_2():
+    db = TestingSessionLocal()
+
+    try:
+        user = User(
+            email="test_customer_2@example.com",
+            password_hash=hash_password("test-password"),
+            role="customer",
+            is_active=True,
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        return user
+
+    finally:
+        db.close()
+
+@pytest.fixture
+def customer_2_token(test_customer_2):
+    return create_access_token(
+        user_id=test_customer_2.id,
+        role=test_customer_2.role,
+    )
+
+@pytest.fixture
+def customer_2_client(customer_2_token):
+    client = TestClient(app)
+
+    client.headers.update({
+        "Authorization": f"Bearer {customer_2_token}"
+    })
+
+    return client
+
+
 
 @pytest.fixture
 def customer_token(test_customer):
@@ -147,3 +187,48 @@ def test_admin():
     finally:
         db.close()
 
+
+@pytest.fixture
+def test_product():
+    db = TestingSessionLocal()
+
+    try:
+        product = Product(
+            name="Test Product",
+            description="Product for cart tests",
+            price=50.00,
+            stock_quantity=20,
+            is_active=True,
+        )
+
+        db.add(product)
+        db.commit()
+        db.refresh(product)
+
+        return product
+
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def inactive_product():
+    db = TestingSessionLocal()
+
+    try:
+        product = Product(
+            name="Inactive Product",
+            description="Product that cannot be added to cart",
+            price=50.00,
+            stock_quantity=20,
+            is_active=False,
+        )
+
+        db.add(product)
+        db.commit()
+        db.refresh(product)
+
+        return product
+
+    finally:
+        db.close()

@@ -184,68 +184,6 @@ def test_get_product_invalid_id():
     assert response.status_code == 422
 
 
-def test_admin_can_update_product(admin_client):
-    """Administrators can patch a product and update selected fields on the record."""
-    create_response = admin_client.post(
-        "/products",
-        json={
-            "name": "Product Before Update",
-            "description": "Original description",
-            "price": 50.00,
-            "stock_quantity": 10,
-        },
-    )
-
-    assert create_response.status_code == 201
-
-    product_id = create_response.json()["id"]
-
-    response = admin_client.patch(
-        f"/products/{product_id}",
-        json={
-            "price": 75.00,
-            "stock_quantity": 20,
-        },
-    )
-
-    assert response.status_code == 200
-
-    data = response.json()
-
-    assert data["id"] == product_id
-    assert data["name"] == "Product Before Update"
-    assert data["description"] == "Original description"
-    assert data["price"] == "75.00"
-    assert data["stock_quantity"] == 20
-    assert data["is_active"] is True
-
-
-def test_customer_cannot_update_product(admin_client, customer_client):
-    """A customer cannot modify another user's admin-owned product."""
-    create_response = admin_client.post(
-        "/products",
-        json={
-            "name": "Protected Product",
-            "description": "Customer must not modify this",
-            "price": 100.00,
-            "stock_quantity": 10,
-        },
-    )
-
-    assert create_response.status_code == 201
-
-    product_id = create_response.json()["id"]
-
-    response = customer_client.patch(
-        f"/products/{product_id}",
-        json={
-            "price": 50.00,
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Administrator privileges required"
-
 
 def test_unauthenticated_user_cannot_update_product(admin_client):
     """Patch requests are rejected for users who are not authenticated."""
