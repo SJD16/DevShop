@@ -206,7 +206,15 @@ def update_order_status(
 
     new_status = status_data.status
 
-    # 3. Confirming an order requires administrator privileges
+    # 3. A pending order can only become confirmed or cancelled.
+    if new_status == OrderStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only confirmed or cancelled status changes are allowed",
+        )
+
+
+    # 4. Confirming an order requires administrator privileges
     if new_status == OrderStatus.CONFIRMED:
         if current_user.role != "administrator":
             raise HTTPException(
@@ -214,7 +222,7 @@ def update_order_status(
                 detail="Only administrators can confirm orders",
             )
 
-    # 4. Cancelling an order requires ownership
+    # 5. Cancelling an order requires ownership
     if new_status == OrderStatus.CANCELLED:
         if order.user_id != current_user.id:
             raise HTTPException(
@@ -240,10 +248,10 @@ def update_order_status(
 
             product.stock_quantity += order_item.quantity
 
-    # 5. Update order status
+    # 6. Update order status
     order.status = new_status
 
-    # 6. Commit status + inventory restoration together
+    # 7. Commit status + inventory restoration together
     db.commit()
     db.refresh(order)
 

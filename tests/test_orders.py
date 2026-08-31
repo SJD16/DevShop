@@ -766,3 +766,46 @@ def test_admin_cannot_cancel_another_customers_order(
 
     assert product_response.status_code == 200
     assert product_response.json()["stock_quantity"] == 18
+
+
+def test_pending_order_cannot_be_changed_to_pending(
+    customer_client,
+    test_product,
+):
+    # Create an order.
+    add_response = customer_client.post(
+        "/cart/items",
+        json={
+            "product_id": test_product.id,
+            "quantity": 1,
+        },
+    )
+
+    assert add_response.status_code == 201
+
+    order_response = customer_client.post("/orders")
+
+    assert order_response.status_code == 201
+
+    order_id = order_response.json()["id"]
+
+    # Attempt to change the already-pending order to pending.
+    response = customer_client.patch(
+        f"/orders/{order_id}/status",
+        json={
+            "status": "pending",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Only confirmed or cancelled status changes are allowed"
+    )
+
+    # The order should remain pending.
+    order_check = customer_client.get(
+        f"/orders/{order_id}"
+    )
+
+    assert order_check.status_code == 200
+    assert order_check.json()["status"] == "pending"
