@@ -29,5 +29,46 @@ pipeline {
                 '''
             }
         }
+
+        stage('Start PostgreSQL') {
+            steps {
+                sh '''
+                    docker rm -f devshop-postgres 2>/dev/null || true
+
+                    docker run -d \
+                        --name devshop-postgres \
+                        -e POSTGRES_USER=devshop \
+                        -e POSTGRES_PASSWORD=devshop_ci_password \
+                        -e POSTGRES_DB=devshop_test \
+                        -p 5432:5432 \
+                        postgres:16
+                '''
+            }
+        }
+
+        stage('Verify PostgreSQL') {
+            steps {
+                sh '''
+                    .venv/bin/python - <<'PY'
+import time
+import psycopg
+
+for attempt in range(30):
+    try:
+        conn = psycopg.connect(
+            "postgresql://devshop:devshop_ci_password@localhost:5432/devshop_test"
+        )
+        conn.close()
+        print("PostgreSQL is ready")
+        break
+    except psycopg.OperationalError:
+        print(f"PostgreSQL not ready yet (attempt {attempt + 1}/30)")
+        time.sleep(1)
+else:
+    raise RuntimeError("PostgreSQL did not become ready")
+PY
+                '''
+            }
+        }
     }
 }
