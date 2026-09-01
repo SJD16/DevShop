@@ -73,7 +73,7 @@ PY
         stage('Run Database Migrations') {
             steps {
                 sh '''
-                    DATABASE_URL="postgresql://devshop:devshop_ci_password@localhost:5432/devshop_test" \
+                    DATABASE_URL=postgresql+psycopg://devshop:devshop_ci_password@localhost:5432/devshop_test \
                     .venv/bin/alembic upgrade head
                 '''
             }
