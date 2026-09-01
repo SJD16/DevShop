@@ -2,21 +2,30 @@ pipeline {
     agent any
 
     stages {
+
         stage('Hello') {
             steps {
                 echo 'DevShop CI pipeline starting...'
             }
         }
 
-        stage('Environment') {
+        stage('Python Environment') {
             steps {
-                sh 'python3 --version'
-                sh 'pip3 --version'
+                sh '''
+                    python3 --version
+                    python3 -m venv .venv
+                    .venv/bin/python --version
+                    .venv/bin/pip --version
+                '''
             }
         }
+
         stage('Install Dependencies') {
             steps {
-                sh 'python3 -m pip install -r requirements.txt'
+                sh '''
+                    .venv/bin/python -m pip install --upgrade pip
+                    .venv/bin/python -m pip install -r requirements.txt
+                '''
             }
         }
     }
