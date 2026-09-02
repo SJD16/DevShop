@@ -81,6 +81,7 @@ PY
         stage('Run Tests') {
             steps {
                 sh '''
+                    JWT_SECRET_KEY="devshop-ci-test-secret-$(printf '%064d' 0)" \
                     TEST_DATABASE_URL="postgresql+psycopg://devshop:devshop_ci_password@localhost:5432/devshop_test" \
                     .venv/bin/pytest -q
                 '''
