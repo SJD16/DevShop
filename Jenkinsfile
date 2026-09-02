@@ -78,5 +78,13 @@ PY
                 '''
             }
         }
+        stage('Run Tests') {
+            steps {
+                sh '''
+                    TEST_DATABASE_URL="postgresql+psycopg://devshop:devshop_ci_password@localhost:5432/devshop_test" \
+                    .venv/bin/pytest -q
+                '''
+            }
+        }
     }
 }
