@@ -129,5 +129,29 @@ PY
                 '''
             }
         }
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" \
+                            --password-stdin
+
+                        docker tag devshop:${BUILD_NUMBER} \
+                            ${DOCKER_USERNAME}/devshop:${BUILD_NUMBER}
+
+                        docker push ${DOCKER_USERNAME}/devshop:${BUILD_NUMBER}
+
+                        docker logout
+                    '''
+                }
+            }
+        }
     }
 }
