@@ -94,5 +94,36 @@ PY
                 sh 'docker build -t devshop:${BUILD_NUMBER} .'
             }
         }
+        stage('Validate Docker Image') {
+            steps {
+                sh '''
+                    docker run -d \
+                    --name devshop-app-ci \
+                    --network devshop-network \
+                    -p 8000:8000 \
+                    -e DATABASE_URL="postgresql+psycopg://devshop:devshop_ci_password@devshop-postgres:5432/devshop_test" \
+                    -e JWT_SECRET_KEY="devshop-ci-test-secret-0000000000000000000000000000000000000000000000000000000000000000" \
+                    devshop:${BUILD_NUMBER}
+
+                    echo "Waiting for DevShop container..."
+
+                    for i in $(seq 1 30); do
+                        if curl -fsS http://localhost:8000/; then
+                            echo
+                            echo "DevShop container is healthy"
+                            break
+                        fi
+
+                        echo "DevShop not ready yet (attempt $i/30)"
+                        sleep 2
+                    done
+
+                    curl -fsS http://localhost:8000/
+
+                    docker stop devshop-app-ci
+                    docker rm devshop-app-ci
+                '''
+            }
+        }
     }
 }
