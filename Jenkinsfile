@@ -89,5 +89,10 @@ PY
                 '''
             }
         }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t devshop:${BUILD_NUMBER} .'
+            }
+        }
     }
 }
