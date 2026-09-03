@@ -33,10 +33,13 @@ pipeline {
         stage('Start PostgreSQL') {
             steps {
                 sh '''
+                    docker network create devshop-ci-network || true
+
                     docker rm -f devshop-postgres 2>/dev/null || true
 
                     docker run -d \
                         --name devshop-postgres \
+                        --network devshop-ci-network \
                         -e POSTGRES_USER=devshop \
                         -e POSTGRES_PASSWORD=devshop_ci_password \
                         -e POSTGRES_DB=devshop_test \
@@ -97,9 +100,11 @@ PY
         stage('Validate Docker Image') {
             steps {
                 sh '''
+                    docker rm -f devshop-app-ci || true
+
                     docker run -d \
                     --name devshop-app-ci \
-                    --network devshop-network \
+                    --network devshop-ci-network \
                     -p 8000:8000 \
                     -e DATABASE_URL="postgresql+psycopg://devshop:devshop_ci_password@devshop-postgres:5432/devshop_test" \
                     -e JWT_SECRET_KEY="devshop-ci-test-secret-0000000000000000000000000000000000000000000000000000000000000000" \
@@ -120,8 +125,7 @@ PY
 
                     curl -fsS http://localhost:8000/
 
-                    docker stop devshop-app-ci
-                    docker rm devshop-app-ci
+                    docker rm -f devshop-app-ci
                 '''
             }
         }
