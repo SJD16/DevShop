@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: devshop-migration
+  namespace: devshop
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 4
+  template:
+    metadata:
+      labels:
+        app: devshop-migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: sjd16/devshop:3
+          command:
+            - alembic
+            - upgrade
+            - head
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: devshop-config
+                  key: DATABASE_URL
