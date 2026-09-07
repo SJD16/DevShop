@@ -15,11 +15,11 @@ spec:
     spec:
       containers:
       - name: devshop
-          image: sjd16/devshop:3
-          ports:
+        image: sjd16/devshop:3
+        ports:
             - containerPort: 8000
 
-          env:
+        env:
             - name: DATABASE_URL
               valueFrom:
                 configMapKeyRef:
@@ -32,14 +32,14 @@ spec:
                   name: devshop-secret
                   key: JWT_SECRET_KEY
 
-          readinessProbe:
+        readinessProbe:
             httpGet:
               path: /
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 5
 
-          livenessProbe:
+        livenessProbe:
             httpGet:
               path: /
               port: 8000
