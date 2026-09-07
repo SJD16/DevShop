@@ -32,6 +32,9 @@ spec:
                   name: devshop-secret
                   key: JWT_SECRET_KEY
 
+            - name: DEVSHOP_ENV
+              value: "gitops"
+
         readinessProbe:
             httpGet:
               path: /
