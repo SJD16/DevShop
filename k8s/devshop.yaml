@@ -15,7 +15,11 @@ spec:
     spec:
       containers:
       - name: devshop
+<<<<<<< HEAD
         image: sjd16/devshop:3
+=======
+        image: sjd16/devshop:
+>>>>>>> 9fc5137 (fixing images tag issues)
         ports:
             - containerPort: 8000
 

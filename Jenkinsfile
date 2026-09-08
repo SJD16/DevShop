@@ -169,7 +169,9 @@ PY
         stage('Update Kubernetes Image') {
             steps {
                 sh '''
-                    sed -i "s|image: sjd16/devshop:.*|image: sjd16/devshop:${BUILD_NUMBER}|" k8s/devshop.yaml
+                    IMAGE_TAG=$(git rev-parse --short HEAD)
+
+                    sed -i "s|image: sjd16/devshop:.*|image: sjd16/devshop:${IMAGE_TAG}|" k8s/devshop.yaml
 
                     echo "Updated Kubernetes manifest:"
                     grep "image:" k8s/devshop.yaml
