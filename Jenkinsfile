@@ -153,5 +153,19 @@ PY
                 }
             }
         }
+        stage('Update Kubernetes Image') {
+            steps {
+                sh '''
+                    sed -i "s|image: sjd16/devshop:.*|image: sjd16/devshop:${BUILD_NUMBER}|" k8s/devshop.yaml
+
+                    echo "Updated Kubernetes manifest:"
+                    grep "image:" k8s/devshop.yaml
+
+                    echo
+                    echo "Git diff:"
+                    git diff -- k8s/devshop.yaml
+                '''
+            }
+        }        
     }
 }
