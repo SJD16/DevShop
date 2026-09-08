@@ -107,15 +107,17 @@ PY
         stage('Validate Docker Image') {
             steps {
                 sh '''
+                    IMAGE_TAG=$(git rev-parse --short HEAD)
+
                     docker rm -f devshop-app-ci || true
 
                     docker run -d \
-                    --name devshop-app-ci \
-                    --network devshop-ci-network \
-                    -p 8000:8000 \
-                    -e DATABASE_URL="postgresql+psycopg://devshop:devshop_ci_password@devshop-postgres:5432/devshop_test" \
-                    -e JWT_SECRET_KEY="devshop-ci-test-secret-0000000000000000000000000000000000000000000000000000000000000000" \
-                    devshop:${BUILD_NUMBER}
+                        --name devshop-app-ci \
+                        --network devshop-ci-network \
+                        -p 8000:8000 \
+                        -e DATABASE_URL="postgresql+psycopg://devshop:devshop_ci_password@devshop-postgres:5432/devshop_test" \
+                        -e JWT_SECRET_KEY="devshop-ci-test-secret-0000000000000000000000000000000000000000000000000000000000000000" \
+                        devshop:${IMAGE_TAG}
 
                     echo "Waiting for DevShop container..."
 
@@ -136,6 +138,7 @@ PY
                 '''
             }
         }
+
         stage('Push Docker Image') {
             steps {
                 withCredentials([
@@ -146,20 +149,23 @@ PY
                     )
                 ]) {
                     sh '''
+                        IMAGE_TAG=$(git rev-parse --short HEAD)
+
                         echo "$DOCKER_PASSWORD" | docker login \
                             -u "$DOCKER_USERNAME" \
                             --password-stdin
 
-                        docker tag devshop:${BUILD_NUMBER} \
-                            ${DOCKER_USERNAME}/devshop:${BUILD_NUMBER}
+                        docker tag devshop:${IMAGE_TAG} \
+                            ${DOCKER_USERNAME}/devshop:${IMAGE_TAG}
 
-                        docker push ${DOCKER_USERNAME}/devshop:${BUILD_NUMBER}
+                        docker push ${DOCKER_USERNAME}/devshop:${IMAGE_TAG}
 
                         docker logout
                     '''
                 }
             }
         }
+
         stage('Update Kubernetes Image') {
             steps {
                 sh '''
