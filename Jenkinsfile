@@ -166,6 +166,21 @@ PY
                     git diff -- k8s/devshop.yaml
                 '''
             }
+        }
+        stage('Commit Kubernetes Image Update') {
+            steps {
+                sh '''
+                    git config user.name "Jenkins"
+                    git config user.email "jenkins@devshop.local"
+
+                    git add k8s/devshop.yaml
+
+                    echo "Staged changes:"
+                    git diff --cached -- k8s/devshop.yaml
+
+                    git commit -m "Update DevShop image to ${BUILD_NUMBER}"
+                '''
+            }
         }        
     }
 }
