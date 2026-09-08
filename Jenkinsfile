@@ -181,6 +181,21 @@ PY
                     git commit -m "Update DevShop image to ${BUILD_NUMBER}"
                 '''
             }
-        }        
+        }
+        stage('Push Kubernetes Manifest Update') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-push',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/SJD16/DevShop.git HEAD:master
+                    '''
+                }
+            }
+        }                
     }
 }
