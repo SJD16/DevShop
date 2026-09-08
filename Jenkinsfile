@@ -94,7 +94,14 @@ PY
         }
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t devshop:${BUILD_NUMBER} .'
+                        sh '''
+                            IMAGE_TAG=$(git rev-parse --short HEAD)
+
+                            echo "Building Docker image:"
+                            echo "devshop:${IMAGE_TAG}"
+
+                            docker build -t devshop:${IMAGE_TAG} .
+                        '''
             }
         }
         stage('Validate Docker Image') {
