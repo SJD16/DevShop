@@ -15,3 +15,4 @@ app.include_router(orders_router)
 @app.get("/")
 def root():
     return {"message": "DevShop is working!"}
+# CI/CD traceability test
