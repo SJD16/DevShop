@@ -1,8 +1,6 @@
 pipeline {
     agent any
-    environment {
-        IMAGE_TAG = ''
-    }
+
     stages {
 
         stage('Hello') {
@@ -101,6 +99,8 @@ PY
                         script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
+
+                    echo "IMAGE_TAG=${env.IMAGE_TAG}"
                 }
 
                 sh '''
