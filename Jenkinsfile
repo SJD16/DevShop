@@ -1,6 +1,8 @@
 pipeline {
     agent any
-
+    environment {
+        IMAGE_TAG = ''
+    }
     stages {
 
         stage('Hello') {
@@ -94,20 +96,25 @@ PY
         }
         stage('Build Docker Image') {
             steps {
-                        sh '''
-                            IMAGE_TAG=$(git rev-parse --short HEAD)
+                script {
+                    env.IMAGE_TAG = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
 
-                            echo "Building Docker image:"
-                            echo "devshop:${IMAGE_TAG}"
+                sh '''
+                    echo "Building Docker image:"
+                    echo "devshop:${IMAGE_TAG}"
 
-                            docker build -t devshop:${IMAGE_TAG} .
-                        '''
+                    docker build -t devshop:${IMAGE_TAG} .
+                '''
             }
         }
         stage('Validate Docker Image') {
             steps {
                 sh '''
-                    IMAGE_TAG=$(git rev-parse --short HEAD)
+                    
 
                     docker rm -f devshop-app-ci || true
 
@@ -149,7 +156,7 @@ PY
                     )
                 ]) {
                     sh '''
-                        IMAGE_TAG=$(git rev-parse --short HEAD)
+                        
 
                         echo "$DOCKER_PASSWORD" | docker login \
                             -u "$DOCKER_USERNAME" \
@@ -169,7 +176,7 @@ PY
         stage('Update Kubernetes Image') {
             steps {
                 sh '''
-                    IMAGE_TAG=$(git rev-parse --short HEAD)
+                    
 
                     sed -i "s|image: sjd16/devshop:.*|image: sjd16/devshop:${IMAGE_TAG}|" k8s/devshop.yaml
 
@@ -185,6 +192,7 @@ PY
         stage('Commit Kubernetes Image Update') {
             steps {
                 sh '''
+                    
                     git config user.name "Jenkins"
                     git config user.email "jenkins@devshop.local"
 
@@ -193,7 +201,7 @@ PY
                     echo "Staged changes:"
                     git diff --cached -- k8s/devshop.yaml
 
-                    git commit -m "Update DevShop image to ${BUILD_NUMBER}"
+                    git commit -m "Update DevShop image to ${IMAGE_TAG}"
                 '''
             }
         }
