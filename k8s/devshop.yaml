@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: devshop
-        image: sjd16/devshop:d81375d
+        image: sjd16/devshop:7d87917
         ports:
             - containerPort: 8000
 
