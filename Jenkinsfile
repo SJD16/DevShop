@@ -176,12 +176,22 @@ PY
         stage('Update Kubernetes Image') {
             steps {
                 sh '''
-                    
-
                     sed -i "s|image: sjd16/devshop:.*|image: sjd16/devshop:${IMAGE_TAG}|" k8s/devshop.yaml
 
                     echo "Updated Kubernetes manifest:"
                     grep "image:" k8s/devshop.yaml
+
+                    echo
+                    echo "Verifying Kubernetes image..."
+
+                    if ! grep -q "image: sjd16/devshop:${IMAGE_TAG}" k8s/devshop.yaml; then
+                        echo "ERROR: Kubernetes manifest does not contain expected image:"
+                        echo "sjd16/devshop:${IMAGE_TAG}"
+                        exit 1
+                    fi
+
+                    echo "Kubernetes manifest contains the expected image:"
+                    echo "sjd16/devshop:${IMAGE_TAG}"
 
                     echo
                     echo "Git diff:"
@@ -189,6 +199,7 @@ PY
                 '''
             }
         }
+
         stage('Commit Kubernetes Image Update') {
             steps {
                 sh '''
