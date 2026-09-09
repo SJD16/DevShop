@@ -202,20 +202,36 @@ PY
 
         stage('Commit Kubernetes Image Update') {
             steps {
-                sh '''
-                    
-                    git config user.name "Jenkins"
-                    git config user.email "jenkins@devshop.local"
+                script {
+                    sh '''
+                        git config user.name "Jenkins"
+                        git config user.email "jenkins@devshop.local"
 
-                    git add k8s/devshop.yaml
+                        git add k8s/devshop.yaml
 
-                    echo "Staged changes:"
-                    git diff --cached -- k8s/devshop.yaml
+                        echo "Checking for Kubernetes manifest changes..."
 
-                    git commit -m "Update DevShop image to ${IMAGE_TAG}"
-                '''
+                        if git diff --cached --quiet -- k8s/devshop.yaml; then
+                            echo "No Kubernetes manifest changes detected."
+                            echo "Image tag is already ${IMAGE_TAG}."
+                        else
+                            echo "Kubernetes manifest has changed."
+                            echo "Committing image update..."
+
+                            echo
+                            echo "Staged changes:"
+                            git diff --cached -- k8s/devshop.yaml
+
+                            git commit -m "Update DevShop image to ${IMAGE_TAG}"
+
+                            echo "Kubernetes manifest commit created."
+                        fi
+                    '''
+                }
             }
         }
+
+
         stage('Push Kubernetes Manifest Update') {
             steps {
                 withCredentials([
