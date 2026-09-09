@@ -232,4 +232,19 @@ PY
             }
         }                
     }
+    post {
+        always {
+            sh '''
+                echo "Cleaning up CI Docker resources..."
+
+                docker rm -f devshop-app-ci 2>/dev/null || true
+                docker rm -f devshop-postgres 2>/dev/null || true
+
+                docker network rm devshop-ci-network 2>/dev/null || true
+
+                echo "CI Docker cleanup complete."
+            '''
+        }
+    }
+
 }
