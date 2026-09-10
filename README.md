@@ -51,4 +51,3 @@ GET    /orders
 GET    /orders/{order_id}
 PATCH  /orders/{order_id}/status
 POST   /orders/{order_id}/cancel
-# Git push race test
