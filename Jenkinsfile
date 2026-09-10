@@ -91,6 +91,8 @@ PY
                     export JWT_SECRET_KEY="devshop-ci-test-secret-0000000000000000000000000000000000000000000000000000000000000000"
 
                     .venv/bin/pytest -q
+                    echo "PAUSING FOR RACE CONDITION TEST..."
+                    sleep 60
                 '''
             }
         }
