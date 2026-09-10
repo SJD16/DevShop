@@ -102,7 +102,13 @@ PY
                         returnStdout: true
                     ).trim()
 
+                    env.SOURCE_COMMIT = sh(
+                        script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+
                     echo "IMAGE_TAG=${env.IMAGE_TAG}"
+                    echo "SOURCE_COMMIT=${env.SOURCE_COMMIT}"
                 }
 
                 sh '''
@@ -244,6 +250,34 @@ PY
                     )
                 ]) {
                     sh '''
+                        echo "Fetching latest origin/master..."
+
+                        git fetch origin master
+
+                        REMOTE_MASTER=$(git rev-parse origin/master)
+
+                        echo "Jenkins source commit:"
+                        echo "${SOURCE_COMMIT}"
+
+                        echo "Current origin/master:"
+                        echo "${REMOTE_MASTER}"
+
+                        if [ "${REMOTE_MASTER}" != "${SOURCE_COMMIT}" ]; then
+                            echo
+                            echo "ERROR: origin/master changed during this Jenkins build."
+                            echo "Jenkins started from:"
+                            echo "${SOURCE_COMMIT}"
+                            echo "But origin/master is now:"
+                            echo "${REMOTE_MASTER}"
+                            echo
+                            echo "Refusing to push in order to avoid overwriting"
+                            echo "another Git commit."
+                            exit 1
+                        fi
+
+                        echo "origin/master has not changed."
+                        echo "Safe to push Jenkins GitOps commit."
+
                         git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/SJD16/DevShop.git HEAD:master
                     '''
                 }
@@ -264,5 +298,4 @@ PY
             '''
         }
     }
-
 }
