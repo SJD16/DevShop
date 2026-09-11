@@ -145,7 +145,7 @@ PY
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'trivy-report.txt',
+                    archiveArtifacts artifacts: "trivy-${IMAGE_TAG}.txt",
                         allowEmptyArchive: true
                 }
             }
