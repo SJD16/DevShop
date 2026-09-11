@@ -121,6 +121,36 @@ PY
                 '''
             }
         }
+
+        stage('Trivy Container Scan') {
+            steps {
+                sh '''
+
+                    echo "========================================"
+                    echo "Trivy Container Security Scan"
+                    echo "Image: devshop:${IMAGE_TAG}"
+                    echo "========================================"
+
+                    echo "Scanning Docker image with Trivy..."
+                    trivy image \
+                        --format table \
+                        --output trivy-report.txt \
+                        devshop:${IMAGE_TAG}
+
+                    echo
+                    echo "Trivy scan completed."
+                    echo "Report:"
+                    cat trivy-report.txt
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'trivy-report.txt',
+                        allowEmptyArchive: true
+                }
+            }
+        }
+
         stage('Validate Docker Image') {
             steps {
                 sh '''
