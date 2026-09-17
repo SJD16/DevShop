@@ -134,13 +134,13 @@ PY
                     echo "Scanning Docker image with Trivy..."
                     trivy image \
                         --format table \
-                        --output trivy-report.txt \
+                        --output trivy-${IMAGE_TAG}.txt \
                         devshop:${IMAGE_TAG}
 
                     echo
                     echo "Trivy scan completed."
                     echo "Report:"
-                    cat trivy-report.txt
+                    cat trivy-${IMAGE_TAG}.txt
                 '''
             }
             post {
