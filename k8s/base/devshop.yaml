@@ -5,27 +5,30 @@ metadata:
   namespace: devshop
 spec:
   replicas: 1
+
   selector:
     matchLabels:
       app: devshop
+
   template:
     metadata:
       labels:
         app: devshop
+
     spec:
       containers:
-      - name: devshop
-        image: sjd16/devshop:94010f6
-        ports:
+        - name: devshop
+          image: sjd16/devshop:94010f6
+
+          ports:
             - containerPort: 8000
 
-        env:
+          env:
             - name: DATABASE_URL
               valueFrom:
                 configMapKeyRef:
                   name: devshop-config
                   key: DATABASE_URL
-
             - name: JWT_SECRET_KEY
               valueFrom:
                 secretKeyRef:
@@ -33,16 +36,24 @@ spec:
                   key: JWT_SECRET_KEY
 
             - name: DEVSHOP_ENV
-              value: "gitops"
+              value: gitops
 
-        readinessProbe:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          readinessProbe:
             httpGet:
               path: /
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 5
 
-        livenessProbe:
+          livenessProbe:
             httpGet:
               path: /
               port: 8000
@@ -57,8 +68,10 @@ metadata:
   namespace: devshop
 spec:
   type: NodePort
+
   selector:
     app: devshop
+
   ports:
     - port: 8000
       targetPort: 8000

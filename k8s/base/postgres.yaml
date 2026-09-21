@@ -1,30 +1,56 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: devshop-postgres
   namespace: devshop
 spec:
+  serviceName: devshop-postgres
   replicas: 1
+
   selector:
     matchLabels:
       app: devshop-postgres
+
   template:
     metadata:
       labels:
         app: devshop-postgres
+
     spec:
       containers:
         - name: postgres
           image: postgres:16
+
           ports:
             - containerPort: 5432
+
           env:
             - name: POSTGRES_USER
-              value: devshop
+              valueFrom:
+                configMapKeyRef:
+                  name: devshop-config
+                  key: DB_USER
+
             - name: POSTGRES_PASSWORD
-              value: devshop_dev_password
+              valueFrom:
+                secretKeyRef:
+                  name: devshop-secret
+                  key: DB_PASSWORD
+
             - name: POSTGRES_DB
-              value: devshop_test
+              valueFrom:
+                configMapKeyRef:
+                  name: devshop-config
+                  key: DB_NAME
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
           readinessProbe:
             exec:
               command:
@@ -35,6 +61,16 @@ spec:
                 - devshop_test
             initialDelaySeconds: 5
             periodSeconds: 5
+
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: devshop-postgres-data
+
 ---
 apiVersion: v1
 kind: Service
@@ -42,6 +78,7 @@ metadata:
   name: devshop-postgres
   namespace: devshop
 spec:
+  clusterIP: None
   selector:
     app: devshop-postgres
   ports:
