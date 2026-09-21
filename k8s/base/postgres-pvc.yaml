@@ -6,6 +6,11 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+
   resources:
     requests:
       storage: 5Gi
+
+  storageClassName: manual
+
+  volumeName: devshop-postgres-pv

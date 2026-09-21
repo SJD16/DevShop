@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: devshop-postgres-pv
+spec:
+  capacity:
+    storage: 5Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Delete
+
+  storageClassName: manual
+
+  hostPath:
+    path: /data/devshop-postgres
