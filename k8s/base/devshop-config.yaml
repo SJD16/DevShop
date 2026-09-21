@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devshop-config
+  namespace: devshop
+data:
+  DATABASE_URL: postgresql+psycopg://devshop:devshop_dev_password@devshop-postgres:5432/devshop_test
+  DB_HOST: devshop-postgres
+  DB_PORT: "5432"
+  DB_NAME: devshop_test
+  DB_USER: devshop  
