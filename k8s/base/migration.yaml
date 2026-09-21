@@ -23,16 +23,44 @@ spec:
           image: sjd16/devshop:94010f6
 
           command:
-            - alembic
-            - upgrade
-            - head
+            - python
+            - -c
+            - |
+              import socket
+              import time
+
+              host = "devshop-postgres"
+              port = 5432
+
+              print(f"Waiting for PostgreSQL at {host}:{port}...")
+
+              while True:
+                  try:
+                      with socket.create_connection((host, port), timeout=2):
+                          print("PostgreSQL is accepting TCP connections.")
+                          break
+                  except (ConnectionRefusedError, TimeoutError, OSError):
+                      print("PostgreSQL not ready yet. Retrying...")
+                      time.sleep(2)
+
+              print("Running Alembic migrations...")
+
+              import subprocess
+              raise SystemExit(
+                  subprocess.call(["alembic", "upgrade", "head"])
+              )
 
           env:
             - name: DATABASE_URL
-              value: postgresql+psycopg://devshop:devshop_dev_password@devshop-postgres:5432/devshop_test
-
-            - name: JWT_SECRET_KEY
               valueFrom:
-                secretKeyRef:
-                  name: devshop-secret
-                  key: JWT_SECRET_KEY
+                configMapKeyRef:
+                  name: devshop-config
+                  key: DATABASE_URL
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
