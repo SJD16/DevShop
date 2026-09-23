@@ -8,4 +8,4 @@ resources:
   - postgres.yaml
   - migration.yaml
   - devshop.yaml
-  - postgres-pv.yaml
+  

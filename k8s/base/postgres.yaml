@@ -42,7 +42,8 @@ spec:
                 configMapKeyRef:
                   name: devshop-config
                   key: DB_NAME
-
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           resources:
             requests:
               cpu: 100m

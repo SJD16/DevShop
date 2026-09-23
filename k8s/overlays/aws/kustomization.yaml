@@ -5,7 +5,7 @@ namespace: devshop
 
 resources:
   - ../../base
-  - postgres-pv.yaml
+  - postgres-storageclass.yaml
 
 patches:
   - target:

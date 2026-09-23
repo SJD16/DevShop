@@ -1,0 +1,8 @@
+
+- op: replace
+  path: /spec/storageClassName
+  value: manual
+
+- op: replace
+  path: /spec/volumeName
+  value: devshop-postgres-pv  
