@@ -51,3 +51,23 @@ module "eks" {
     ManagedBy   = "Terraform"
   }
 }
+
+module "jenkins" {
+  source = "../../modules/jenkins"
+
+  name          = "devshop-jenkins"
+  ami_id        = "ami-0045d7fc2ad003464"
+  instance_type = "t3.small"
+
+  vpc_id    = module.vpc.vpc_id
+  subnet_id = module.vpc.public_subnet_ids[0]
+
+  instance_profile_name = "DevShopEC2Profile"
+
+  tags = {
+    Project     = "DevShop"
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+    Role        = "Jenkins"
+  }
+}

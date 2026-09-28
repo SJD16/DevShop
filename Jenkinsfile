@@ -283,7 +283,7 @@ PY
                     allowEmptyArchive: false
             }
         }
-
+ 
         stage('Commit Kubernetes Image Update') {
             steps {
                 sh '''

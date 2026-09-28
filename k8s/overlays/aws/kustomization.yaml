@@ -14,3 +14,8 @@ patches:
       name: devshop-postgres-data
       namespace: devshop
     path: postgres-pvc-patch.yaml
+
+images:
+  - name: sjd16/devshop
+    newName: sjd16/devshop
+    newTag: 94010f6
