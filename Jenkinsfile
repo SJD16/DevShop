@@ -91,8 +91,7 @@ PY
                     export JWT_SECRET_KEY="devshop-ci-test-secret-0000000000000000000000000000000000000000000000000000000000000000"
 
                     .venv/bin/pytest -q
-                    echo "PAUSING FOR RACE CONDITION TEST..."
-                    sleep 60
+                    
                 '''
             }
         }
@@ -216,58 +215,101 @@ PY
         stage('Update Kubernetes Image') {
             steps {
                 sh '''
-                    sed -i "s|image: sjd16/devshop:.*|image: sjd16/devshop:${IMAGE_TAG}|" k8s/devshop.yaml
+                    echo "Updating AWS Kustomize image tag..."
 
-                    echo "Updated Kubernetes manifest:"
-                    grep "image:" k8s/devshop.yaml
+                    sed -i "s|newTag: .*|newTag: ${IMAGE_TAG}|" \
+                        k8s/overlays/aws/kustomization.yaml
 
                     echo
-                    echo "Verifying Kubernetes image..."
+                    echo "Updated Kustomize configuration:"
+                    grep -A3 "images:" k8s/overlays/aws/kustomization.yaml
 
-                    if ! grep -q "image: sjd16/devshop:${IMAGE_TAG}" k8s/devshop.yaml; then
-                        echo "ERROR: Kubernetes manifest does not contain expected image:"
-                        echo "sjd16/devshop:${IMAGE_TAG}"
+                    echo
+                    echo "Validating expected image tag..."
+
+                    if ! grep -q "newTag: ${IMAGE_TAG}" \
+                        k8s/overlays/aws/kustomization.yaml; then
+
+                        echo "ERROR: Expected image tag was not found."
+                        echo "Expected: ${IMAGE_TAG}"
                         exit 1
                     fi
 
-                    echo "Kubernetes manifest contains the expected image:"
-                    echo "sjd16/devshop:${IMAGE_TAG}"
+                    echo "Kustomize image tag is ${IMAGE_TAG}"
 
                     echo
                     echo "Git diff:"
-                    git diff -- k8s/devshop.yaml
+                    git diff -- k8s/overlays/aws/kustomization.yaml
                 '''
+            }
+        }
+
+        stage('Validate Kustomize') {
+            steps {
+                sh '''
+                    echo "Rendering AWS Kustomize overlay..."
+
+                    kubectl kustomize k8s/overlays/aws > rendered-manifests.yaml
+
+                    echo
+                    echo "DevShop images in rendered manifests:"
+
+                    grep "image: sjd16/devshop:" rendered-manifests.yaml
+
+                    EXPECTED_IMAGE="sjd16/devshop:${IMAGE_TAG}"
+
+                    COUNT=$(grep -c "image: ${EXPECTED_IMAGE}" rendered-manifests.yaml || true)
+
+                    echo
+                    echo "Expected image:"
+                    echo "${EXPECTED_IMAGE}"
+
+                    echo "Occurrences:"
+                    echo "${COUNT}"
+
+                    if [ "${COUNT}" -ne 2 ]; then
+                        echo
+                        echo "ERROR: Expected exactly two DevShop image references."
+                        echo "One should belong to the Deployment."
+                        echo "One should belong to the migration Job."
+                        exit 1
+                    fi
+
+                    echo
+                    echo "Kustomize validation successful."
+                '''
+
+                archiveArtifacts artifacts: 'rendered-manifests.yaml',
+                    allowEmptyArchive: false
             }
         }
 
         stage('Commit Kubernetes Image Update') {
             steps {
-                script {
-                    sh '''
-                        git config user.name "Jenkins"
-                        git config user.email "jenkins@devshop.local"
+                sh '''
+                    git config user.name "Jenkins"
+                    git config user.email "jenkins@devshop.local"
 
-                        git add k8s/devshop.yaml
+                    git add k8s/overlays/aws/kustomization.yaml
 
-                        echo "Checking for Kubernetes manifest changes..."
+                    echo "Checking for Kustomize changes..."
 
-                        if git diff --cached --quiet -- k8s/devshop.yaml; then
-                            echo "No Kubernetes manifest changes detected."
-                            echo "Image tag is already ${IMAGE_TAG}."
-                        else
-                            echo "Kubernetes manifest has changed."
-                            echo "Committing image update..."
+                    if git diff --cached --quiet -- k8s/overlays/aws/kustomization.yaml; then
+                        echo "No Kustomize changes detected."
+                        echo "Image tag is already ${IMAGE_TAG}."
+                    else
+                        echo "Kustomize image configuration has changed."
+                        echo "Committing image update..."
 
-                            echo
-                            echo "Staged changes:"
-                            git diff --cached -- k8s/devshop.yaml
+                        echo
+                        echo "Staged changes:"
+                        git diff --cached -- k8s/overlays/aws/kustomization.yaml
 
-                            git commit -m "Update DevShop image to ${IMAGE_TAG}"
+                        git commit -m "Update DevShop image to ${IMAGE_TAG}"
 
-                            echo "Kubernetes manifest commit created."
-                        fi
-                    '''
-                }
+                        echo "GitOps commit created."
+                    fi
+                '''
             }
         }
 
