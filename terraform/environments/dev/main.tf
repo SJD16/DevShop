@@ -71,3 +71,15 @@ module "jenkins" {
     Role        = "Jenkins"
   }
 }
+
+module "argocd" {
+  source = "../../modules/argocd"
+
+  namespace     = "argocd"
+  release_name  = "argocd"
+  chart_version = "9.1.0"
+
+  depends_on = [
+    module.eks
+  ]
+}

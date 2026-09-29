@@ -20,7 +20,7 @@ apt-get install -y \
     unzip \
     git \
     fontconfig \
-    openjdk-21-jre
+    openjdk-21-jre \
     python3-venv
 
 # --------------------------------------------------
