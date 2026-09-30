@@ -14,5 +14,5 @@ app.include_router(orders_router)
 
 @app.get("/")
 def root():
-    return {"message": "DevShop is working!"}
+    return {"message": "DevShop is working GitOps deployment #2!"}
 # CI/CD traceability test
