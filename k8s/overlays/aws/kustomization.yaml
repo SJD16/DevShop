@@ -18,4 +18,4 @@ patches:
 images:
   - name: sjd16/devshop
     newName: sjd16/devshop
-    newTag: b8aff76
+    newTag: 6c379a9
