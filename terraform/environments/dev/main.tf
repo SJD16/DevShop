@@ -45,6 +45,9 @@ module "eks" {
 
   node_disk_size = 20
 
+  devshop_jwt_secret_key = var.devshop_jwt_secret_key
+  devshop_db_password    = var.devshop_db_password
+
   tags = {
     Project     = "DevShop"
     Environment = "dev"
@@ -78,6 +81,18 @@ module "argocd" {
   namespace     = "argocd"
   release_name  = "argocd"
   chart_version = "9.1.0"
+
+  depends_on = [
+    module.eks,
+    module.secrets_store
+  ]
+}
+
+
+module "secrets_store" {
+  source = "../../modules/secrets-store"
+
+  namespace = "kube-system"
 
   depends_on = [
     module.eks

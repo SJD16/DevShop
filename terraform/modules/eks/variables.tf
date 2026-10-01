@@ -58,3 +58,15 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "devshop_jwt_secret_key" {
+  description = "JWT signing secret for DevShop"
+  type        = string
+  sensitive   = true
+}
+
+variable "devshop_db_password" {
+  description = "PostgreSQL password for DevShop"
+  type        = string
+  sensitive   = true
+}

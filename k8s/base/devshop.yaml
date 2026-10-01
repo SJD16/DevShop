@@ -16,6 +16,7 @@ spec:
         app: devshop
 
     spec:
+      serviceAccountName: devshop
       containers:
         - name: devshop
           image: sjd16/devshop:94010f6
@@ -26,8 +27,8 @@ spec:
           env:
             - name: DATABASE_URL
               valueFrom:
-                configMapKeyRef:
-                  name: devshop-config
+                secretKeyRef:
+                  name: devshop-secret
                   key: DATABASE_URL
             - name: JWT_SECRET_KEY
               valueFrom:
@@ -37,7 +38,11 @@ spec:
 
             - name: DEVSHOP_ENV
               value: gitops
-
+              
+          volumeMounts:
+          - name: secrets-store
+            mountPath: /mnt/secrets-store
+            readOnly: true          
           resources:
             requests:
               cpu: 100m
@@ -60,6 +65,13 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
 
+      volumes:
+      - name: secrets-store
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "devshop-secrets"
 ---
 apiVersion: v1
 kind: Service

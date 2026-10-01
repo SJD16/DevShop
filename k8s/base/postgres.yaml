@@ -17,10 +17,12 @@ spec:
         app: devshop-postgres
 
     spec:
+      serviceAccountName: devshop
       containers:
         - name: postgres
           image: postgres:16
 
+              
           ports:
             - containerPort: 5432
 
@@ -59,19 +61,26 @@ spec:
                 - -U
                 - devshop
                 - -d
-                - devshop_test
+                - devshop
             initialDelaySeconds: 5
             periodSeconds: 5
 
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
-
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
       volumes:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: devshop-postgres-data
-
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: devshop-secrets
 ---
 apiVersion: v1
 kind: Service

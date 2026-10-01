@@ -16,12 +16,16 @@ spec:
         app: devshop-migration
 
     spec:
+      serviceAccountName: devshop    
       restartPolicy: Never
 
       containers:
         - name: migration
           image: sjd16/devshop:94010f6
-
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
           command:
             - python
             - -c
@@ -53,8 +57,8 @@ spec:
           env:
             - name: DATABASE_URL
               valueFrom:
-                configMapKeyRef:
-                  name: devshop-config
+                secretKeyRef:
+                  name: devshop-secret
                   key: DATABASE_URL
 
           resources:
@@ -64,3 +68,10 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: devshop-secrets

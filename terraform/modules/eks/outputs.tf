@@ -27,3 +27,8 @@ output "node_role_arn" {
   description = "IAM role ARN used by EKS worker nodes"
   value       = aws_iam_role.node.arn
 }
+
+output "devshop_secret_arn" {
+  description = "ARN of the DevShop Secrets Manager secret"
+  value       = aws_secretsmanager_secret.devshop.arn
+}

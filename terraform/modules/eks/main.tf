@@ -171,3 +171,90 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   ]
 }
 
+
+resource "aws_secretsmanager_secret" "devshop" {
+  name = "devshop/devshop"
+  recovery_window_in_days = 0
+  tags = merge(
+    var.tags,
+    {
+      Name = "devshop-devshop"
+    }
+  )
+}
+
+resource "aws_secretsmanager_secret_version" "devshop" {
+  secret_id = aws_secretsmanager_secret.devshop.id
+
+  secret_string = jsonencode({
+    JWT_SECRET_KEY = var.devshop_jwt_secret_key
+    DB_PASSWORD    = var.devshop_db_password
+    DATABASE_URL   = "postgresql+psycopg://devshop:${var.devshop_db_password}@devshop-postgres:5432/devshop"
+  })
+}
+
+resource "aws_iam_role" "devshop_secrets" {
+  name = "${var.cluster_name}-devshop-secrets"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Service = "pods.eks.amazonaws.com"
+        }
+
+        Action = [
+          "sts:AssumeRole",
+          "sts:TagSession"
+        ]
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+
+resource "aws_iam_policy" "devshop_secrets" {
+  name = "${var.cluster_name}-devshop-secrets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+
+        Resource = aws_secretsmanager_secret.devshop.arn
+      }
+    ]
+  })
+}
+
+
+resource "aws_iam_role_policy_attachment" "devshop_secrets" {
+  role       = aws_iam_role.devshop_secrets.name
+  policy_arn = aws_iam_policy.devshop_secrets.arn
+}
+
+
+resource "aws_eks_pod_identity_association" "devshop" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "devshop"
+  service_account = "devshop"
+  role_arn        = aws_iam_role.devshop_secrets.arn
+
+  depends_on = [
+    aws_eks_addon.pod_identity_agent,
+    aws_iam_role_policy_attachment.devshop_secrets
+  ]
+}

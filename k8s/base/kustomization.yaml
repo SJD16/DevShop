@@ -4,8 +4,9 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - devshop-config.yaml
+  - devshop-secretproviderclass.yaml
   - postgres-pvc.yaml
   - postgres.yaml
   - migration.yaml
   - devshop.yaml
-  
+  - devshop-serviceaccount.yaml
