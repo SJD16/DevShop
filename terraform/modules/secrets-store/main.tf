@@ -6,7 +6,18 @@ resource "helm_release" "secrets_store_csi_driver" {
   repository = "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts"
   chart      = "secrets-store-csi-driver"
   version    = "1.6.1"
-
+  values = [
+    yamlencode({
+      tokenRequests = [
+        {
+          audience = "sts.amazonaws.com"
+        },
+        {
+          audience = "pods.eks.amazonaws.com"
+        }
+      ]
+    })
+  ]
   wait    = true
   timeout = 600
 }
