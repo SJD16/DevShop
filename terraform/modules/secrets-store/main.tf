@@ -6,8 +6,16 @@ resource "helm_release" "secrets_store_csi_driver" {
   repository = "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts"
   chart      = "secrets-store-csi-driver"
   version    = "1.6.1"
+
+  wait    = true
+  timeout = 600
+
   values = [
     yamlencode({
+      syncSecret = {
+        enabled = true
+      }
+
       tokenRequests = [
         {
           audience = "sts.amazonaws.com"
@@ -18,8 +26,6 @@ resource "helm_release" "secrets_store_csi_driver" {
       ]
     })
   ]
-  wait    = true
-  timeout = 600
 }
 
 resource "helm_release" "secrets_store_csi_driver_provider_aws" {
@@ -46,4 +52,3 @@ resource "helm_release" "secrets_store_csi_driver_provider_aws" {
     helm_release.secrets_store_csi_driver
   ]
 }
-
