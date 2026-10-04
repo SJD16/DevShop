@@ -1,437 +1,100 @@
-PostgreSQL Pod Recreation Persistence Test
+# PostgreSQL Pod Recreation Persistence Test
 
-Test ID: TEST-001
-Date: 2026-09-23
-Environment: AWS EKS
-Cluster: devshop-eks
-Namespace: devshop
+This test verifies that a known product record survives deletion and recreation of the PostgreSQL pod. It deliberately deletes only the pod. Do not use it to infer safety of deleting the PVC, PV, EBS volume, or cluster.
 
-Objective
+The recorded execution passed; see [INC-011](../../incidents/INC-011-postgresql-persistence-test.md). The data path is shown in the [PostgreSQL persistence diagram](../../../Diagrams/AWS/PostgreSQL_persistence.md).
 
-Verify that PostgreSQL application data survives deletion and recreation of the PostgreSQL pod.
+## Preconditions
 
-The purpose of this test is to confirm that database data is stored on persistent storage through the Kubernetes PersistentVolumeClaim (PVC) and AWS EBS volume rather than inside the lifecycle of the PostgreSQL pod itself.
+- Current `kubectl` context points to the intended EKS cluster.
+- Namespace `devshop` has a ready DevShop application and PostgreSQL StatefulSet.
+- The `devshop-postgres-data` PVC is bound.
+- You can create a unique marker product through the DevShop API using an administrator account, or insert it directly into the development database. Use disposable test data only.
 
-Architecture
-DevShop Application
-        |
-        v
-devshop-postgres Service
-        |
-        v
-PostgreSQL StatefulSet
-        |
-        v
-devshop-postgres-0
-        |
-        v
-PersistentVolumeClaim
-devshop-postgres-data
-        |
-        v
-PersistentVolume
-        |
-        v
-AWS EBS gp3
-        |
-        v
-5 GiB persistent storage
+## Procedure
 
+### 1. Create known test data
 
-The expected behavior is:
+Create a unique product through the application API and record its exact name and ID. Alternatively, insert a marker directly into PostgreSQL (replace the marker with a unique value for this run):
 
-PostgreSQL Pod
-      |
-      X  DELETE POD
-      |
-      v
-StatefulSet creates replacement pod
-      |
-      v
-Same PVC
-      |
-      v
-Same EBS-backed storage
-      |
-      v
-Existing PostgreSQL data
+```sh
+kubectl exec -n devshop devshop-postgres-0 -- \
+  psql -U devshop -d devshop \
+  -c "INSERT INTO products (name, description, price, stock_quantity, is_active) VALUES ('persistence-check-REPLACE-ME', 'pod recreation test', 1.00, 1, true) RETURNING id, name;"
+```
 
-Storage Configuration
+Record the returned product ID and unique name. Use the configured database name if it differs from `devshop`.
 
-The PostgreSQL workload uses the AWS-specific StorageClass:
+### 2. Identify the PostgreSQL pod
 
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: devshop-gp3
-provisioner: ebs.csi.aws.com
-volumeBindingMode: WaitForFirstConsumer
-allowVolumeExpansion: true
-parameters:
-  type: gp3
-  fsType: ext4
-reclaimPolicy: Delete
+```sh
+kubectl get pods -n devshop -l app=devshop-postgres -o wide
+```
 
-Important
+Record the current pod name. The current StatefulSet creates `devshop-postgres-0`.
 
-The current StorageClass uses:
+### 3. Verify the PVC and record its PV
 
-reclaimPolicy: Delete
+```sh
+kubectl get pvc devshop-postgres-data -n devshop -o wide
+export POSTGRES_PV="$(kubectl get pvc devshop-postgres-data -n devshop -o jsonpath='{.spec.volumeName}')"
+kubectl get pv "$POSTGRES_PV" -o wide
+```
 
+The PVC should be `Bound`. Record the PV name for comparison after recreation.
 
-This means the EBS volume should not be treated as independently protected from deletion of the Kubernetes storage resources.
+### 4. Delete only the PostgreSQL pod
 
-This test only validates pod recreation. It does not validate PVC deletion or EKS cluster destruction.
+```sh
+kubectl delete pod devshop-postgres-0 -n devshop
+```
 
-Initial Validation
+Do not delete the StatefulSet or PVC.
 
-Verify the PostgreSQL StatefulSet:
+### 5. Wait for Kubernetes to recreate it
 
-AWS_PROFILE=devshop kubectl get statefulset devshop-postgres -n devshop
+```sh
+kubectl wait --for=condition=Ready pod/devshop-postgres-0 -n devshop --timeout=5m
+kubectl get pod devshop-postgres-0 -n devshop -o wide
+```
 
+The pod should return to `Running` and become ready.
 
-Expected:
+### 6. Verify the PVC/PV remains bound
 
-NAME               READY
-devshop-postgres   1/1
+```sh
+kubectl get pvc devshop-postgres-data -n devshop -o wide
+kubectl get pv "$POSTGRES_PV" -o wide
+```
 
+The PVC should remain `Bound` to the same PV recorded before deletion.
 
-Verify the PVC:
+### 7. Verify PostgreSQL is ready
 
-AWS_PROFILE=devshop kubectl get pvc devshop-postgres-data -n devshop
+```sh
+kubectl exec -n devshop devshop-postgres-0 -- pg_isready -U devshop -d devshop
+```
 
+The command should report that PostgreSQL accepts connections. If not, inspect the pod events and logs before continuing.
 
-Expected:
+### 8. Query the application/database again
 
-NAME                    STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS
-devshop-postgres-data   Bound    pvc-c9ac1d4d-0353-4d8a-ac0a-7bf16a945008   5Gi        RWO            devshop-gp3
+Query the marker record directly, replacing the value with the unique name from step 1:
 
+```sh
+kubectl exec -n devshop devshop-postgres-0 -- \
+  psql -U devshop -d devshop \
+  -c "SELECT id, name, price, stock_quantity FROM products WHERE name = 'persistence-check-REPLACE-ME';"
+```
 
-Verify the PostgreSQL pod:
+Optionally verify the application path too: port-forward `svc/devshop` in one terminal, then request `GET /products` from another and confirm the marker product appears.
 
-AWS_PROFILE=devshop kubectl get pod devshop-postgres-0 \
-  -n devshop \
-  -o wide
+### 9. Confirm the record survived
 
+Compare the returned product ID and values with the values recorded before pod deletion.
 
-Initial state:
+## Expected result
 
-devshop-postgres-0   1/1   Running
+The PostgreSQL pod is recreated and ready, the PVC remains bound to the same PV, and the exact marker record remains queryable. Record the date, cluster/environment, pod name before and after, PVC/PV status, marker ID, and PASS/FAIL outcome without recording credentials or Secret values.
 
-Test Data
-
-A test administrator account and product were created before performing the pod recreation test.
-
-Administrator
-Email: admin@example.com
-Role: administrator
-
-Product
-Name: AWS DevShop Laptop
-Price: 1299.99
-Stock quantity: 10
-
-
-Verify the product directly in PostgreSQL:
-
-AWS_PROFILE=devshop kubectl exec \
-  -n devshop \
-  devshop-postgres-0 \
-  -- psql -U devshop -d devshop_test \
-  -c "SELECT id, name, price, stock_quantity FROM products WHERE name = 'AWS DevShop Laptop';"
-
-
-Observed result:
-
- id |        name        |  price  | stock_quantity
-----+--------------------+---------+----------------
-  1 | AWS DevShop Laptop | 1299.99 |             10
-
-
-Verify the administrator:
-
-AWS_PROFILE=devshop kubectl exec \
-  -n devshop \
-  devshop-postgres-0 \
-  -- psql -U devshop -d devshop_test \
-  -c "SELECT id, email, role FROM users WHERE email = 'admin@example.com';"
-
-
-Observed result:
-
- id |       email       |     role
-----+-------------------+---------------
-  1 | admin@example.com | administrator
-
-Test Procedure
-1. Record the current PostgreSQL pod
-AWS_PROFILE=devshop kubectl get pod devshop-postgres-0 \
-  -n devshop \
-  -o wide
-
-
-Initial pod:
-
-devshop-postgres-0
-
-2. Record the PVC
-AWS_PROFILE=devshop kubectl get pvc devshop-postgres-data \
-  -n devshop
-
-
-The PVC was:
-
-STATUS: Bound
-CAPACITY: 5Gi
-STORAGECLASS: devshop-gp3
-
-3. Delete the PostgreSQL pod
-AWS_PROFILE=devshop kubectl delete pod \
-  devshop-postgres-0 \
-  -n devshop
-
-
-This intentionally deletes only the pod.
-
-The StatefulSet and PVC are not deleted.
-
-4. Observe pod recreation
-AWS_PROFILE=devshop kubectl get pods \
-  -n devshop \
-  -w
-
-
-The StatefulSet recreated:
-
-devshop-postgres-0
-
-
-The replacement pod reached:
-
-READY   1/1
-STATUS  Running
-
-5. Verify the PVC
-AWS_PROFILE=devshop kubectl get pvc \
-  devshop-postgres-data \
-  -n devshop
-
-
-The PVC remained:
-
-STATUS: Bound
-
-
-The same volume remained associated with the PVC:
-
-pvc-c9ac1d4d-0353-4d8a-ac0a-7bf16a945008
-
-6. Verify the product after pod recreation
-AWS_PROFILE=devshop kubectl exec \
-  -n devshop \
-  devshop-postgres-0 \
-  -- psql -U devshop -d devshop_test \
-  -c "SELECT id, name, price, stock_quantity FROM products WHERE name = 'AWS DevShop Laptop';"
-
-
-Observed:
-
- id |        name        |  price  | stock_quantity
-----+--------------------+---------+----------------
-  1 | AWS DevShop Laptop | 1299.99 |             10
-
-7. Verify the administrator after pod recreation
-AWS_PROFILE=devshop kubectl exec \
-  -n devshop \
-  devshop-postgres-0 \
-  -- psql -U devshop -d devshop_test \
-  -c "SELECT id, email, role FROM users WHERE email = 'admin@example.com';"
-
-
-Observed:
-
- id |       email       |     role
-----+-------------------+---------------
-  1 | admin@example.com | administrator
-
-Result
-
-PASS
-
-The PostgreSQL pod was deleted and recreated successfully.
-
-The following remained intact:
-
-PostgreSQL StatefulSet
-
-PostgreSQL PVC
-
-EBS-backed persistent storage
-
-Administrator account
-
-Product data
-
-The replacement PostgreSQL pod successfully mounted the existing persistent storage.
-
-What This Test Demonstrates
-
-This test demonstrates the difference between pod lifecycle and persistent storage lifecycle.
-
-The PostgreSQL pod is disposable:
-
-Pod
-  ↓
-can be deleted
-  ↓
-StatefulSet recreates it
-
-
-The database data is stored separately:
-
-Pod
- ↓
-PVC
- ↓
-PV
- ↓
-EBS
-
-
-Therefore, deleting the pod does not delete the database.
-
-This is one of the key reasons Kubernetes StatefulSets are commonly used with persistent workloads.
-
-What This Test Does NOT Demonstrate
-
-This test does not prove that the data will survive:
-
-PVC deletion
-
-PV deletion
-
-StorageClass deletion
-
-EKS cluster deletion
-
-AWS account/resource deletion
-
-Those are separate storage lifecycle scenarios.
-
-The current StorageClass uses:
-
-reclaimPolicy: Delete
-
-
-Therefore, destructive storage experiments should be performed deliberately and only after deciding whether the underlying EBS volume should be preserved.
-
-Troubleshooting Notes
-
-During the AWS EKS setup, the EBS CSI driver initially experienced an IAM authorization problem:
-
-ec2:DescribeAvailabilityZones
-UnauthorizedOperation
-
-
-The problem was related to the EBS CSI controller's IAM/Pod Identity configuration.
-
-The final architecture uses:
-
-EBS CSI Controller
-        |
-        v
-ebs-csi-controller-sa
-        |
-        v
-EKS Pod Identity
-        |
-        v
-devshop-eks-ebs-csi-role
-        |
-        v
-AmazonEBSCSIDriverPolicy
-        |
-        v
-AWS EBS APIs
-
-
-This is important because the EBS CSI controller should have its required AWS permissions through its dedicated identity rather than relying on the worker node IAM role.
-
-Lessons Learned
-1. Pods are disposable
-
-Deleting the PostgreSQL pod does not necessarily mean deleting the database.
-
-The StatefulSet recreated the pod automatically.
-
-2. Persistent storage is independent of pod lifecycle
-
-The PostgreSQL data survived because the replacement pod mounted the existing PVC.
-
-3. StatefulSet provides stable workload identity
-
-The PostgreSQL workload returned as:
-
-devshop-postgres-0
-
-
-rather than receiving an arbitrary deployment-style pod identity.
-
-4. PVC is the Kubernetes abstraction for persistent storage
-
-The application does not directly manage the EBS volume.
-
-The relationship is:
-
-PostgreSQL
-    ↓
-Pod
-    ↓
-PVC
-    ↓
-PV
-    ↓
-EBS CSI Driver
-    ↓
-AWS EBS
-
-5. Reclaim policy matters
-
-The current:
-
-reclaimPolicy: Delete
-
-
-is acceptable for this disposable demonstration environment, but would require reconsideration for a production workload where data preservation is important.
-
-Future Tests
-
-Potential future storage tests:
-
-Delete and recreate the PostgreSQL pod — completed
-
-Reschedule PostgreSQL onto another EKS node
-
-Verify EBS volume attachment to the new node
-
-Test application recovery after node failure
-
-Test PVC expansion
-
-Investigate EBS volume lifecycle
-
-Compare Delete versus Retain reclaim policies
-
-Test backup and restore
-
-Introduce AWS-native database backup strategies
-
-These tests should be performed separately from this baseline test.
-
-Final Conclusion
-
-The AWS DevShop PostgreSQL deployment successfully demonstrated persistent database storage across PostgreSQL pod deletion and recreation.
-
-The database records remained available after the original PostgreSQL pod was removed because the replacement pod reattached to the existing PVC backed by an AWS EBS gp3 volume.
-
-Test status: PASS
+This test validates pod recreation only. The current AWS StorageClass uses `reclaimPolicy: Delete`; PVC removal or cluster teardown can have a different volume lifecycle and requires a separate test and data-retention decision.

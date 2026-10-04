@@ -1,873 +1,134 @@
-DevShop EKS Rebuild Runbook
+# Rebuild the DevShop EKS Environment
 
-This runbook rebuilds the disposable AWS/EKS development environment for DevShop.
+This runbook follows the current Terraform module structure in `terraform/environments/dev/`. It is for the disposable AWS demonstration environment. It does not use the older `eksctl` recipe in `aws/eks/cluster.yaml`.
 
-The environment is intentionally disposable. PostgreSQL uses an EBS-backed PVC so that pod recreation can be tested, but the current StorageClass uses:
+## Prerequisites
 
-reclaimPolicy: Delete
+- AWS CLI authenticated to the intended account, Terraform `>= 1.6.0`, Git, and `kubectl`.
+- Permissions for the resources declared in the environment and its modules.
+- Network access to AWS, Terraform provider registries, Helm repositories, GitHub, and Docker Hub.
+- Fresh sensitive input values for `devshop_jwt_secret_key` and `devshop_db_password`. Supply them outside Git, such as through `TF_VAR_devshop_jwt_secret_key` and `TF_VAR_devshop_db_password`, or a local untracked tfvars file. Do not echo or commit them.
+- Verify the current AWS region, account, EKS version support, and Jenkins AMI suitability before creating resources. The repository currently declares region default `us-east-1`, cluster version `1.36`, and a fixed AMI ID; these are configuration, not guaranteed current account values.
 
-Therefore, deleting the PVC/cluster can also delete the underlying EBS volume.
+## Terraform working directory
 
-For persistent production data, this configuration must be changed.
-0. Environment Variables
+From the repository root:
 
-Set the environment variables used throughout the runbook.
+```sh
+cd terraform/environments/dev
+export AWS_REGION="${AWS_REGION:-us-east-1}"
+export TF_VAR_aws_region="$AWS_REGION"
+aws sts get-caller-identity
+```
 
-export AWS_PROFILE=devshop
-export AWS_REGION=us-east-1
-export CLUSTER_NAME=devshop-eks
-export NAMESPACE=devshop
-export NODEPORT=31140
-export CLIENT_IP="$(curl -4 -s https://checkip.amazonaws.com)"
+The Terraform default is `us-east-1`; if using another region, set `AWS_REGION` first so the AWS CLI and Terraform target the same region. Use the intended AWS profile explicitly when needed. Confirm this is the correct account and region before continuing.
 
-Verify:
+## Validation
 
-echo "AWS_PROFILE=$AWS_PROFILE"
-echo "AWS_REGION=$AWS_REGION"
-echo "CLUSTER_NAME=$CLUSTER_NAME"
-echo "CLIENT_IP=$CLIENT_IP"
+```sh
+terraform fmt -check -recursive ../..
+terraform init
+terraform validate
+```
 
-The CLIENT_IP value is the public IPv4 address from which the NodePort will be accessed.
+The environment root composes the VPC, EKS, Jenkins, Argo CD, and Secrets Store modules. Review `main.tf`, provider configuration, variables, and current module code if any of these files have changed since the last run.
 
-If the public IP changes, the security-group rule must be updated.
-1. Authenticate to AWS
+## Terraform plan
 
-aws login --profile "$AWS_PROFILE"
+```sh
+terraform plan
+```
 
-Verify the active identity:
+Ensure the required secret inputs are available in your shell or local tfvars file before planning. Review the full plan for the target account, region, cluster version, node group, Jenkins host, IAM/Pod Identity, Secrets Manager, and Helm resources. Stop if Terraform proposes unexpected replacement or deletion. Do not copy old resource IDs from previous runs into this runbook.
 
-AWS_PROFILE="$AWS_PROFILE" aws sts get-caller-identity
+## Terraform apply
 
-Verify the selected region:
+After reviewing the plan and confirming the target, apply the reviewed configuration:
 
-AWS_PROFILE="$AWS_PROFILE" aws configure get region
+```sh
+terraform apply
+```
 
-2. Create the EKS Cluster
+Terraform creates or updates the AWS network and EKS resources, managed node group, IAM roles and associations, Secrets Manager secret/version, Jenkins EC2 resources, and the Argo CD and Secrets Store Helm releases as defined by the environment. The `depends_on` relationships ensure the EKS cluster precedes the platform add-ons. Terraform is responsible for those declared resources; Kubernetes-created AWS resources may have separate lifecycles.
 
-The cluster definition is stored in:
+## Kubeconfig configuration
 
-aws/eks/cluster.yaml
+Read the cluster name from Terraform output and use the same region configured for this run:
 
-Create the cluster:
+```sh
+export CLUSTER_NAME="$(terraform output -raw eks_cluster_name)"
+aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+kubectl config current-context
+```
 
-AWS_PROFILE="$AWS_PROFILE" eksctl create cluster \
-  --config-file aws/eks/cluster.yaml
+Do not reuse a context from a previous cluster without checking it.
 
-Wait for the cluster to become available.
+## Node verification
 
-Verify:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get nodes -o wide
-
-Expected:
-
-NAME                           STATUS   ROLES    AGE   VERSION
-...                            Ready    <none>   ...   ...
-...                            Ready    <none>   ...   ...
-
-Record the node information:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get nodes -o wide
-
-Do not hardcode node public IPs in this runbook. They can change after rebuilding the cluster.
-3. Install EKS Pod Identity Agent
-
-Install the EKS Pod Identity Agent:
-
-AWS_PROFILE="$AWS_PROFILE" eksctl create addon \
-  --cluster="$CLUSTER_NAME" \
-  --name=eks-pod-identity-agent \
-  --region="$AWS_REGION" \
-  --wait
-
-Verify:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pods \
-  -n kube-system \
-  -l app.kubernetes.io/instance=eks-pod-identity-agent
-
-Also verify the addon:
-
-AWS_PROFILE="$AWS_PROFILE" aws eks describe-addon \
-  --cluster-name "$CLUSTER_NAME" \
-  --addon-name eks-pod-identity-agent \
-  --region "$AWS_REGION"
-
-4. Install the AWS EBS CSI Driver
-
-The PostgreSQL StatefulSet requires the EBS CSI driver to dynamically provision the EBS volume.
-
-Install the addon:
-
-AWS_PROFILE="$AWS_PROFILE" eksctl create addon \
-  --cluster "$CLUSTER_NAME" \
-  --region "$AWS_REGION" \
-  --name aws-ebs-csi-driver \
-  --version v1.66.0-eksbuild.1 \
-  --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy \
-  --auto-apply-pod-identity-associations \
-  --wait
-
-Verify the addon:
-
-AWS_PROFILE="$AWS_PROFILE" aws eks describe-addon \
-  --cluster-name "$CLUSTER_NAME" \
-  --addon-name aws-ebs-csi-driver \
-  --region "$AWS_REGION"
-
-Verify the CSI components:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pods \
-  -n kube-system \
-  -l app.kubernetes.io/name=aws-ebs-csi-driver
-
-5. Verify the EBS CSI Pod Identity Association
-
-The CSI controller needs AWS permissions through EKS Pod Identity.
-
-Check the association:
-
-AWS_PROFILE="$AWS_PROFILE" aws eks list-pod-identity-associations \
-  --cluster-name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
-
-Look for an association containing:
-
-namespace: kube-system
-service account: ebs-csi-controller-sa
-
-You can also inspect the service account:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get serviceaccount \
-  ebs-csi-controller-sa \
-  -n kube-system \
-  -o yaml
-
-If the association does not exist
-
-Create it:
-
-AWS_PROFILE="$AWS_PROFILE" eksctl create podidentityassociation \
-  --cluster "$CLUSTER_NAME" \
-  --region "$AWS_REGION" \
-  --namespace kube-system \
-  --service-account-name ebs-csi-controller-sa \
-  --role-name devshop-eks-ebs-csi-role \
-  --permission-policy-arns arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
-
-Then restart the CSI controller pods so they receive the Pod Identity credentials:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl delete pods \
-  -n kube-system \
-  -l app.kubernetes.io/name=aws-ebs-csi-driver,app.kubernetes.io/component=csi-driver
-
-Wait for them:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pods \
-  -n kube-system \
-  -l app.kubernetes.io/name=aws-ebs-csi-driver \
-  -w
-
-They should eventually return to:
-
-Running
-
-Important
-
-Do not blindly create the Pod Identity association every rebuild.
-
-First check whether it already exists.
-
-Creating infrastructure blindly is one of the reasons rebuild procedures become confusing.
-6. Create the DevShop Namespace
-
-Create the namespace:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl create namespace "$NAMESPACE"
-
-If it already exists:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get namespace "$NAMESPACE"
-
-7. Create the Application Secret
-
-The application requires:
-
-    JWT_SECRET_KEY
-
-    DB_PASSWORD
-
-Do not commit these values to Git.
-
-Generate a new JWT secret:
-
-export JWT_SECRET_KEY="$(openssl rand -hex 32)"
-
-Set the development database password:
-
-export DB_PASSWORD='CHANGE_ME'
-
-Create the Kubernetes Secret:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl create secret generic devshop-secret \
-  --namespace "$NAMESPACE" \
-  --from-literal=JWT_SECRET_KEY="$JWT_SECRET_KEY" \
-  --from-literal=DB_PASSWORD="$DB_PASSWORD"
-
-Verify that the Secret exists without printing its contents:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get secret \
-  devshop-secret \
-  -n "$NAMESPACE"
-
-Do not run commands that expose the secret value unnecessarily.
-8. Deploy DevShop
-
-Deploy the AWS overlay:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl apply -k k8s/overlays/aws
-
-The AWS overlay contains the AWS-specific StorageClass/PVC configuration.
-
-Verify:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pods -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get svc -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pvc -n "$NAMESPACE"
-
-9. Verify PostgreSQL Storage
-
-Check the PVC:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pvc \
-  devshop-postgres-data \
-  -n "$NAMESPACE"
-
-Expected:
-
-STATUS   Bound
-
-Get the PV:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pvc \
-  devshop-postgres-data \
-  -n "$NAMESPACE" \
-  -o jsonpath='{.spec.volumeName}{"\n"}'
-
-Store it:
-
-export POSTGRES_PV="$(
-  AWS_PROFILE="$AWS_PROFILE" kubectl get pvc \
-    devshop-postgres-data \
-    -n "$NAMESPACE" \
-    -o jsonpath='{.spec.volumeName}'
-)"
-
-Inspect it:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pv "$POSTGRES_PV" -o wide
-
-Verify the AWS EBS volume:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pv "$POSTGRES_PV" \
-  -o jsonpath='{.spec.csi.volumeHandle}{"\n"}'
-
-The result should look like:
-
-vol-xxxxxxxxxxxxxxxxx
-
-10. Verify PostgreSQL
-
-Check the StatefulSet:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get statefulset \
-  devshop-postgres \
-  -n "$NAMESPACE"
-
-Check the pod:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pod \
-  devshop-postgres-0 \
-  -n "$NAMESPACE" \
-  -o wide
-
-Check logs if necessary:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl logs \
-  -n "$NAMESPACE" \
-  devshop-postgres-0
-
-11. Verify the Migration Job
-
-Check:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get jobs -n "$NAMESPACE"
-
-The migration job should show:
-
-Complete
-
-If necessary:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl logs \
-  -n "$NAMESPACE" \
-  job/devshop-migration
-
-12. Verify the Application
-
-Check the Deployment:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get deployment \
-  devshop \
-  -n "$NAMESPACE"
-
-Check the Service:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get svc \
-  devshop \
-  -n "$NAMESPACE"
-
-The Service should be a NodePort.
-
-Get the dynamically assigned NodePort:
-
-export DEVSHOP_NODEPORT="$(
-  AWS_PROFILE="$AWS_PROFILE" kubectl get svc devshop \
-    -n "$NAMESPACE" \
-    -o jsonpath='{.spec.ports[0].nodePort}'
-)"
-
-Verify:
-
-echo "$DEVSHOP_NODEPORT"
-
-Do not assume the NodePort will always be 31140.
-13. Discover the Current Node Security Group
-
-Do not reuse a security-group ID from a previous EKS cluster.
-
-First obtain the EC2 instances:
-
-AWS_PROFILE="$AWS_PROFILE" aws ec2 describe-instances \
-  --filters \
-    "Name=tag:eks:cluster-name,Values=$CLUSTER_NAME" \
-  --query 'Reservations[].Instances[].{
-    InstanceId:InstanceId,
-    PrivateIP:PrivateIpAddress,
-    PublicIP:PublicIpAddress,
-    SecurityGroups:SecurityGroups[].GroupId
-  }' \
-  --output table
-
-The cluster's node security group can then be identified from the returned instances.
-
-If multiple security groups are attached, inspect them before adding the NodePort rule.
-14. Allow Temporary NodePort Access
-
-The NodePort is intentionally restricted to the current public IP.
-
-Set:
-
-export CLIENT_IP="$(curl -4 -s https://checkip.amazonaws.com)"
-
-Verify:
-
-echo "$CLIENT_IP"
-
-Set the correct node security group manually after inspecting the previous step:
-
-export NODE_SECURITY_GROUP_ID="sg-XXXXXXXX"
-
-Verify it:
-
-echo "$NODE_SECURITY_GROUP_ID"
-
-Then authorize the current NodePort:
-
-AWS_PROFILE="$AWS_PROFILE" aws ec2 authorize-security-group-ingress \
-  --group-id "$NODE_SECURITY_GROUP_ID" \
-  --protocol tcp \
-  --port "$DEVSHOP_NODEPORT" \
-  --cidr "${CLIENT_IP}/32" \
-  --description "Temporary DevShop NodePort access"
-
-Important
-
-Never copy the security-group ID from yesterday's cluster.
-
-An EKS rebuild can produce different EC2/security-group resource IDs.
-
-The same applies to:
-
-    EC2 instance IDs
-
-    public IP addresses
-
-    private IP addresses
-
-    EBS volume IDs
-
-    PV names
-
-    ENI IDs
-
-Discover these values after every rebuild.
-15. Verify NodePort Access
-
-Get current nodes:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get nodes -o wide
-
-Obtain the public IPs from AWS:
-
-AWS_PROFILE="$AWS_PROFILE" aws ec2 describe-instances \
-  --filters \
-    "Name=tag:eks:cluster-name,Values=$CLUSTER_NAME" \
-  --query 'Reservations[].Instances[].PublicIpAddress' \
-  --output text
-
-Test using a current node public IP:
-
-curl -v \
-  --connect-timeout 10 \
-  "http://<CURRENT_NODE_PUBLIC_IP>:${DEVSHOP_NODEPORT}/"
-
-Expected:
-
-{"message":"DevShop is working!"}
-
-Test the products endpoint:
-
-curl -v \
-  "http://<CURRENT_NODE_PUBLIC_IP>:${DEVSHOP_NODEPORT}/products"
-
-16. Verify Kubernetes Internal Connectivity
-
-Before troubleshooting AWS networking, verify the application works inside Kubernetes.
-
-AWS_PROFILE="$AWS_PROFILE" kubectl run curl-test \
-  -n "$NAMESPACE" \
-  --rm -it \
-  --restart=Never \
-  --image=curlimages/curl \
-  -- \
-  curl -v "http://devshop:8000/"
-
-Expected:
-
-{"message":"DevShop is working!"}
-
-Test:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl run curl-test \
-  -n "$NAMESPACE" \
-  --rm -it \
-  --restart=Never \
-  --image=curlimages/curl \
-  -- \
-  curl -v "http://devshop:8000/products"
-
-If this fails, investigate Kubernetes before investigating AWS security groups.
-17. Initialize the Application
-
-The database is new after a completely new cluster/storage deployment.
-
-Register an application user through the externally reachable application:
-
-curl -i -X POST \
-  "http://<CURRENT_NODE_PUBLIC_IP>:${DEVSHOP_NODEPORT}/auth/register" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "email": "admin@example.com",
-    "password": "admin-password"
-  }'
-
-Promote the user to administrator:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl exec \
-  -n "$NAMESPACE" \
-  devshop-postgres-0 \
-  -- psql -U devshop -d devshop_test \
-  -c "UPDATE users SET role = 'administrator' WHERE email = 'admin@example.com';"
-
-Verify:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl exec \
-  -n "$NAMESPACE" \
-  devshop-postgres-0 \
-  -- psql -U devshop -d devshop_test \
-  -c "SELECT id, email, role FROM users WHERE email = 'admin@example.com';"
-
-18. Authenticate
-
-Set the current application endpoint:
-
-export DEVSHOP_URL="http://<CURRENT_NODE_PUBLIC_IP>:${DEVSHOP_NODEPORT}"
-
-Login:
-
-TOKEN="$(
-  curl -s -X POST \
-    "$DEVSHOP_URL/auth/login" \
-    -H 'Content-Type: application/x-www-form-urlencoded' \
-    -d 'grant_type=password' \
-    -d 'username=admin@example.com' \
-    -d 'password=admin-password' \
-    -d 'scope=' \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])'
-)"
-
-Verify the token:
-
-curl -s \
-  -H "Authorization: Bearer $TOKEN" \
-  "$DEVSHOP_URL/auth/me"
-
-19. Create Test Data
-
-Create a test product:
-
-curl -s -X POST \
-  "$DEVSHOP_URL/products" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "AWS DevShop Laptop",
-    "description": "Test product created through the EKS deployment",
-    "price": 1299.99,
-    "stock_quantity": 10
-  }'
-
-Verify:
-
-curl -s \
-  "$DEVSHOP_URL/products"
-
-20. PostgreSQL Persistence Test
-
-This test verifies that PostgreSQL data survives PostgreSQL pod recreation.
-
-See the dedicated runbook:
-
-docs/runbooks/postgres-pod-recreation.md
-
-The important distinction is:
-
-Delete PostgreSQL Pod
-        |
-        v
-StatefulSet recreates Pod
-        |
-        v
-Existing PVC remains
-        |
-        v
-Existing EBS volume remains attached
-        |
-        v
-PostgreSQL starts
-        |
-        v
-Existing database data remains
-
-This is different from deleting the PVC or destroying the EKS cluster.
-21. Full Health Check
-
-Run:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get nodes -o wide
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pods -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get svc -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pvc -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pv
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get jobs -n "$NAMESPACE"
-
-Expected components:
-
-    EKS cluster: Ready
-
-    EKS nodes: Ready
-
-    Pod Identity Agent: Running
-
-    EBS CSI controller: Running
-
-    EBS CSI node daemonset: Running
-
-    PostgreSQL StatefulSet: 1/1
-
-    PostgreSQL PVC: Bound
-
-    Migration Job: Complete
-
-    DevShop Deployment: Available
-
-    DevShop Service: NodePort
-
-    Internal HTTP access: Working
-
-    External NodePort access: Working
-
-    /products: Working
-
-22. Troubleshooting Order
-
-When something fails, troubleshoot from inside outward.
-Application
-
-Application
-    |
-    └── Pod logs
-
-Check:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl logs \
-  -n "$NAMESPACE" \
-  deployment/devshop
-
-Kubernetes Service
-
-Pod
- |
-Service
- |
-EndpointSlice
-
-Check:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get svc \
-  devshop \
-  -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get endpointslice \
-  -n "$NAMESPACE"
-
-PostgreSQL
-
-Check:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get statefulset \
-  -n "$NAMESPACE"
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pvc \
-  -n "$NAMESPACE"
-
-EBS
-
-Check:
-
-AWS_PROFILE="$AWS_PROFILE" kubectl get pv
-
-Then inspect the CSI volume handle.
-AWS networking
-
-Only after Kubernetes connectivity is confirmed, investigate:
-
-Client
-  |
-  v
-Public Node IP
-  |
-  v
-Security Group
-  |
-  v
-NodePort
-  |
-  v
-Kubernetes Service
-  |
-  v
-Pod
-
-Check:
-
-    current public node IP
-
-    current node security group
-
-    NodePort
-
-    security-group inbound rule
-
-    subnet route table
-
-    Internet Gateway
-
-    Network ACL
-
-23. Destroy the Development Environment
-
-When finished with the AWS lab:
-
-AWS_PROFILE="$AWS_PROFILE" eksctl delete cluster \
-  --name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
-
-Before destroying the cluster, remember:
-
-StorageClass reclaimPolicy = Delete
-
-Therefore, the EBS-backed PostgreSQL volume may be deleted as part of the cluster/storage cleanup.
-
-This environment should therefore be considered disposable.
-24. Important Rebuild Lessons
-Never hardcode ephemeral AWS IDs
-
-Do not reuse values from a previous rebuild:
-
-sg-xxxxxxxx
-i-xxxxxxxx
-vol-xxxxxxxx
-eni-xxxxxxxx
-
-Always rediscover them.
-Never assume the NodePort
-
-The Kubernetes Service may receive a different NodePort.
-
-Discover it:
-
-kubectl get svc devshop -n devshop
-
-or:
-
-kubectl get svc devshop \
-  -n devshop \
-  -o jsonpath='{.spec.ports[0].nodePort}'
-
-Never assume the public node IP
-
-Discover current nodes:
-
+```sh
 kubectl get nodes -o wide
+kubectl get nodes -L workload
+```
 
-or query EC2 directly.
-Never commit credentials
+Confirm nodes are `Ready` and the managed node group is present. Instance addresses and IDs change across rebuilds; discover them from the current cluster rather than copying old values.
 
-Do not commit:
+## System component verification
 
-JWT_SECRET_KEY
-DB_PASSWORD
-AWS credentials
-access tokens
-private keys
+Check the Pod Identity Agent and EBS CSI add-on:
 
-Pod Identity and EBS CSI
+```sh
+kubectl get pods -n kube-system
+aws eks describe-addon --cluster-name "$CLUSTER_NAME" --addon-name eks-pod-identity-agent --region "$AWS_REGION"
+aws eks describe-addon --cluster-name "$CLUSTER_NAME" --addon-name aws-ebs-csi-driver --region "$AWS_REGION"
+aws eks list-pod-identity-associations --cluster-name "$CLUSTER_NAME" --region "$AWS_REGION"
+```
 
-The EBS CSI controller must have the correct AWS permissions.
+Confirm the CSI controller and node pods are ready and that the EBS association references `kube-system/ebs-csi-controller-sa`. Confirm the application association references `devshop/devshop` after Terraform creates it.
 
-If the CSI controller reports:
+Check the platform Helm releases and Argo CD:
 
-UnauthorizedOperation
-ec2:DescribeAvailabilityZones
+```sh
+helm list -A
+kubectl get pods -n argocd
+kubectl get svc -n argocd
+kubectl get pods -n kube-system
+```
 
-check:
+The Argo CD server Service is configured as `LoadBalancer`; any assigned hostname/IP is dynamic. Obtain it from the current Service output. The FastAPI application uses NodePort and is a separate Service.
 
-    EBS CSI addon
+## Kubernetes application verification
 
-    Pod Identity Agent
+Argo CD owns the application synchronization from the Git repository. Check the Application and resources:
 
-    Pod Identity association
+```sh
+kubectl get applications -n argocd
+kubectl get pods,svc,pvc,statefulset,deployments,jobs -n devshop
+kubectl get events -n devshop --sort-by=.lastTimestamp
+kubectl kustomize k8s/overlays/aws
+```
 
-    IAM role
+Confirm the PostgreSQL StatefulSet is ready and its PVC is bound. The PVC should use `devshop-gp3`; the current overlay requests 5 GiB and the StorageClass reclaim policy is `Delete`.
 
-    CSI controller pods
+Confirm the migration Job completed and the DevShop Deployment is ready. If the SecretProviderClass or synced Secret is not present, inspect pod events and the Secrets Store CSI provider/controller before retrying. Do not print Secret contents while troubleshooting.
 
-Restart the CSI controller after creating a missing Pod Identity association.
-Kubernetes Secrets are namespace-scoped
+The application Service is a NodePort. Discover its assigned port each time:
 
-If the application reports:
+```sh
+kubectl get svc devshop -n devshop -o wide
+kubectl get svc devshop -n devshop -o jsonpath='{.spec.ports[0].nodePort}{"\n"}'
+```
 
-secret "devshop-secret" not found
+If testing external access, also obtain the current node addresses and security groups from `kubectl get nodes -o wide` and the AWS EC2 APIs. Any client public IP and security-group IDs are ephemeral. The AWS overlay does not declare an application load balancer or ingress. Follow the [PostgreSQL pod recreation test](../tests/persistence/postgres-pod-recreation.md) for storage verification.
 
-check:
+## Important dependencies
 
-AWS_PROFILE="$AWS_PROFILE" kubectl get secret \
-  devshop-secret \
-  -n devshop
+1. The VPC and EKS cluster must exist before cluster-level providers and Helm releases work.
+2. The Pod Identity Agent precedes EBS CSI and application identity associations.
+3. The EBS CSI controller needs its own Pod Identity permissions to provision and attach volumes.
+4. The Secrets Store CSI Driver and AWS provider must be working before workload pods can mount the SecretProviderClass and synchronize the Kubernetes Secret.
+5. PostgreSQL must be reachable before the migration Job can complete; the Job waits for TCP availability before running Alembic.
+6. Argo CD reads the Git revision and reconciles manifests; Jenkins changes the image tag in Git and does not directly deploy the application.
 
-PostgreSQL lost+found
+## Cleanup considerations
 
-If PostgreSQL reports that its data directory is not empty because of:
-
-lost+found
-
-the EBS filesystem is mounted, but PostgreSQL is attempting to initialize directly at the filesystem root.
-
-The long-term configuration should use a PostgreSQL data subdirectory.
-25. Rebuild Sequence Summary
-
-The complete rebuild sequence is:
-
-AWS Login
-    |
-    v
-Create EKS
-    |
-    v
-Verify Nodes
-    |
-    v
-Pod Identity Agent
-    |
-    v
-EBS CSI Driver
-    |
-    v
-Verify Pod Identity
-    |
-    v
-Create Namespace
-    |
-    v
-Create Application Secret
-    |
-    v
-Deploy Kustomize AWS Overlay
-    |
-    v
-Verify PVC / EBS
-    |
-    v
-Verify PostgreSQL
-    |
-    v
-Verify Migration
-    |
-    v
-Discover NodePort
-    |
-    v
-Discover Node Security Group
-    |
-    v
-Discover Client Public IP
-    |
-    v
-Authorize Temporary NodePort
-    |
-    v
-Test Internal Connectivity
-    |
-    v
-Test External Connectivity
-    |
-    v
-Register Application User
-    |
-    v
-Promote User
-    |
-    v
-Create Test Product
-    |
-    v
-Run PostgreSQL Persistence Test
+Before any teardown, inspect the current Terraform plan/state and the Kubernetes resources that create AWS resources. PostgreSQL's StorageClass uses `reclaimPolicy: Delete`, so removing the PVC can delete its EBS volume. Argo CD's `LoadBalancer` Service can create an AWS NLB and related network interfaces that may outlive EKS teardown if Kubernetes cannot clean them up. The [destruction problem diagram](../../Diagrams/AWS/Destruction_problem.md) records this dependency lesson. Decide how database data and externally managed resources should be handled before cleanup; do not assume that cluster deletion preserves them.
