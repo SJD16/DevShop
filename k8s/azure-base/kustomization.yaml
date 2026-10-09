@@ -10,4 +10,4 @@ resources:
   - migration.yaml
   - devshop.yaml
   - devshop-secretproviderclass.yaml
-  - devshop-serviceaccount.yaml
+  
