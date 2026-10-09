@@ -68,11 +68,20 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: secrets-store-inline
+              mountPath: /mnt/secrets-store
+              readOnly: true
             
       volumes:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: devshop-postgres-data
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: devshop-secrets
         
 ---
 apiVersion: v1
