@@ -9,7 +9,8 @@ spec:
   source:
     repoURL: https://github.com/SJD16/DevShop.git
     targetRevision: master
-    path: k8s/overlays/aws
+    path: k8s/overlays/azure
+    #path: k8s/overlays/aws used for AWS deployment
 
   destination:
     server: https://kubernetes.default.svc

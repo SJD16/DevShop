@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devshop
+  namespace: devshop
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: devshop
+
+  template:
+    metadata:
+      labels:
+        app: devshop
+
+    spec:
+      serviceAccountName: devshop
+
+      containers:
+        - name: devshop
+          image: sjd16/devshop:94010f6
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: devshop-secret
+                  key: DATABASE_URL
+
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: devshop-secret
+                  key: JWT_SECRET_KEY
+
+            - name: DEVSHOP_ENV
+              value: gitops
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devshop
+  namespace: devshop
+spec:
+  type: NodePort
+
+  selector:
+    app: devshop
+
+  ports:
+    - port: 8000
+      targetPort: 8000

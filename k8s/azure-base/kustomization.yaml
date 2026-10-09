@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - devshop-config.yaml
+  - devshop-serviceaccount.yaml
+  - postgres-pvc.yaml
+  - postgres.yaml
+  - migration.yaml
+  - devshop.yaml
