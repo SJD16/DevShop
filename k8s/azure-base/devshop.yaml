@@ -24,7 +24,10 @@ spec:
 
           ports:
             - containerPort: 8000
-
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: /mnt/secrets-store
+              readOnly: true
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -62,7 +65,13 @@ spec:
               port: 8000
             initialDelaySeconds: 15
             periodSeconds: 10
-
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: devshop-secrets
 ---
 apiVersion: v1
 kind: Service
