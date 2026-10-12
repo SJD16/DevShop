@@ -4,7 +4,7 @@
 
 This page describes the AWS EKS demonstration deployment represented by the current repository. Terraform provisions the AWS foundation, EKS add-ons, Jenkins, Argo CD, and Secrets Store CSI components. Argo CD then reconciles the application from `k8s/overlays/aws`. This is a functional learning environment, not production infrastructure.
 
-The [Terraform infrastructure diagram](../../Diagrams/AWS/Terraform_infrastructure.md), [CI/CD + GitOps diagram](../../Diagrams/AWS/CD_+_GitOps_flow.md), and [traffic-focused diagram](../../Diagrams/AWS/Networking_traffic_focused.md) provide visual references.
+The [Terraform infrastructure diagram](../../Diagrams/AWS/Terraform_infrastructure.png), [CI/CD + GitOps diagram](../../Diagrams/AWS/CD_+_GitOps_flow.png), and [traffic-focused diagram](../../Diagrams/AWS/Networking_traffic_focused.png) provide visual references.
 
 ## 2. Prerequisites
 
@@ -144,4 +144,4 @@ For database persistence, follow the [PostgreSQL pod recreation test](../tests/p
 
 ## 9. Cleanup
 
-Before any environment teardown, inspect current Terraform state and the planned changes, and identify AWS resources whose lifecycle is not fully represented by the Terraform graph. In particular, review EBS volumes/PVC reclaim behavior and load balancers created by Kubernetes. The repository's [destruction lesson](../../Diagrams/AWS/Destruction_problem.md) describes why external Kubernetes-created resources can outlive EKS teardown. Do not assume a PVC or cluster deletion preserves database data. No cleanup action is performed by this guide.
+Before any environment teardown, inspect current Terraform state and the planned changes, and identify AWS resources whose lifecycle is not fully represented by the Terraform graph. In particular, review EBS volumes/PVC reclaim behavior and load balancers created by Kubernetes. The repository's [destruction lesson](../../Diagrams/AWS/Destruction_problem.png) describes why external Kubernetes-created resources can outlive EKS teardown. Do not assume a PVC or cluster deletion preserves database data. No cleanup action is performed by this guide.
