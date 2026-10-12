@@ -17,7 +17,7 @@ Developer change → GitHub → Jenkins → Docker Hub
                                                        EKS
 ```
 
-The [CI/CD + GitOps diagram](../../Diagrams/AWS/CD_+_GitOps_flow.md) shows the delivery path; the [Terraform diagram](../../Diagrams/AWS/Terraform_infrastructure.md) shows the infrastructure relationships.
+The [CI/CD + GitOps diagram](../../Diagrams/AWS/CD_+_GitOps_flow.png) shows the delivery path; the [Terraform diagram](../../Diagrams/AWS/Terraform_infrastructure.png) shows the infrastructure relationships.
 
 ## AWS infrastructure and networking
 
@@ -25,7 +25,7 @@ The `dev` Terraform environment composes modules under `terraform/modules/`. The
 
 The environment passes the public subnet IDs to both the EKS cluster and managed node group. Jenkins is also configured in a public subnet with a public IP. Therefore, private subnets exist in Terraform but are not the current EKS node placement. Jenkins' security group allows inbound TCP 8080 from `0.0.0.0/0`; this is a demonstration configuration with a material exposure limitation.
 
-See [networking flow](../../Diagrams/AWS/Networking_flow.md) and the [traffic-focused view](../../Diagrams/AWS/Networking_traffic_focused.md). Those diagrams are reference assets; consult the current Terraform and Kubernetes manifests for exact configuration.
+See [networking flow](../../Diagrams/AWS/Networking_flow.png) and the [traffic-focused view](../../Diagrams/AWS/Networking_traffic_focused.png). Those diagrams are reference assets; consult the current Terraform and Kubernetes manifests for exact configuration.
 
 ## EKS and identity
 
@@ -39,7 +39,7 @@ The module declares the EKS Pod Identity Agent add-on. The EBS CSI add-on uses P
 
 The current application service is a Kubernetes NodePort; the repository does not configure an AWS load balancer or ingress for FastAPI. The Argo CD Helm module separately configures the Argo CD server Service as `LoadBalancer` with an NLB annotation. Do not conflate that Argo CD endpoint with application exposure.
 
-PostgreSQL intentionally runs inside EKS for the project. Its single replica mounts a 5 GiB PVC on the AWS overlay, dynamically backed by EBS gp3 using `ebs.csi.aws.com`. The StorageClass uses `WaitForFirstConsumer`, allows expansion, and has `reclaimPolicy: Delete`. The recorded verification established that data survived deletion and recreation of the pod while the PVC remained. It does not establish survival of PVC or cluster deletion, backup recovery, or production availability. See [PostgreSQL persistence](../../Diagrams/AWS/PostgreSQL_persistence.md) and the [persistence test](../tests/persistence/postgres-pod-recreation.md).
+PostgreSQL intentionally runs inside EKS for the project. Its single replica mounts a 5 GiB PVC on the AWS overlay, dynamically backed by EBS gp3 using `ebs.csi.aws.com`. The StorageClass uses `WaitForFirstConsumer`, allows expansion, and has `reclaimPolicy: Delete`. The recorded verification established that data survived deletion and recreation of the pod while the PVC remained. It does not establish survival of PVC or cluster deletion, backup recovery, or production availability. See [PostgreSQL persistence](../../Diagrams/AWS/PostgreSQL_persistence.png) and the [persistence test](../tests/persistence/postgres-pod-recreation.md).
 
 ## Secrets
 
@@ -58,7 +58,7 @@ Secret values are not part of the manifests or documentation.
 
 Terraform's Jenkins module provisions an EC2 instance and bootstrap script that install Jenkins, Docker, AWS CLI, kubectl, and Trivy. The Jenkinsfile starts a CI PostgreSQL container, applies Alembic migrations to the test database, runs pytest, builds the image, scans it with Trivy, runs the image, publishes it to Docker Hub, edits the AWS Kustomize image tag, validates the rendered manifests, then commits and pushes that GitOps change.
 
-Jenkins does not apply the application manifests to Kubernetes in the current pipeline. The Git change is the handoff; Argo CD owns reconciliation into the cluster. See the [CI/CD + GitOps diagram](../../Diagrams/AWS/CD_+_GitOps_flow.md).
+Jenkins does not apply the application manifests to Kubernetes in the current pipeline. The Git change is the handoff; Argo CD owns reconciliation into the cluster. See the [CI/CD + GitOps diagram](../../Diagrams/AWS/CD_+_GitOps_flow.png).
 
 The repository also has a separate OWASP ZAP in-cluster procedure under `security/zap/`. Its own documentation says it runs outside Jenkins. The current Jenkinsfile has no OWASP Dependency-Check stage, and no runnable Dependency-Check configuration was found in the repository.
 
@@ -66,4 +66,4 @@ The repository also has a separate OWASP ZAP in-cluster procedure under `securit
 
 `terraform/environments/dev/` is the root configuration: it selects provider settings, supplies environment values, composes modules, and exposes outputs. `terraform/modules/` contains the implementation for the VPC, EKS, Jenkins, Argo CD, and Secrets Store components. The environment passes VPC outputs into EKS and Jenkins, and declares dependencies so cluster and CSI prerequisites precede the Helm releases. These are project modules; the repository does not establish them as generic published modules.
 
-For rebuild steps and current-value discovery, see [AWS deployment](../deployment/aws-deployment.md) and the [EKS rebuild runbook](../runbooks/rebuild-eks.md). The [destruction lesson](../../Diagrams/AWS/Destruction_problem.md) preserves an important resource-lifecycle troubleshooting context.
+For rebuild steps and current-value discovery, see [AWS deployment](../deployment/aws-deployment.md) and the [EKS rebuild runbook](../runbooks/rebuild-eks.md). The [destruction lesson](../../Diagrams/AWS/Destruction_problem.png) preserves an important resource-lifecycle troubleshooting context.
