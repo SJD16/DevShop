@@ -10,7 +10,7 @@
 
 The test checked whether PostgreSQL application data survived deletion and recreation of the PostgreSQL StatefulSet pod. It was intended to verify the boundary between a disposable pod and the persistent storage attached through its PVC. It did not test deletion of the PVC, PV, StorageClass, or EKS cluster.
 
-The storage path is documented in the [PostgreSQL persistence diagram](../../Diagrams/AWS/PostgreSQL_persistence.md). The repeatable procedure is in the [pod recreation test](../tests/persistence/postgres-pod-recreation.md).
+The storage path is documented in the [PostgreSQL persistence diagram](../../Diagrams/AWS/PostgreSQL_persistence.png). The repeatable procedure is in the [pod recreation test](../tests/persistence/postgres-pod-recreation.md).
 
 ## Initial state
 
@@ -36,4 +36,4 @@ The storage path is documented in the [PostgreSQL persistence diagram](../../Dia
 
 Deleting a pod managed by a StatefulSet is different from deleting its persistent storage. The PVC and its bound volume outlived this pod recreation, so the replacement could mount the same data. This test does not establish protection from PVC deletion or cluster teardown: the current AWS StorageClass has `reclaimPolicy: Delete`.
 
-During the broader AWS work, the repository also records an EBS CSI authorization issue involving `ec2:DescribeAvailabilityZones`; the current Terraform implementation configures a dedicated CSI role through EKS Pod Identity. The [destruction problem diagram](../../Diagrams/AWS/Destruction_problem.md) records the separate risk that an AWS load balancer created from a Kubernetes Service may remain during EKS teardown and interfere with VPC deletion.
+During the broader AWS work, the repository also records an EBS CSI authorization issue involving `ec2:DescribeAvailabilityZones`; the current Terraform implementation configures a dedicated CSI role through EKS Pod Identity. The [destruction problem diagram](../../Diagrams/AWS/Destruction_problem.png) records the separate risk that an AWS load balancer created from a Kubernetes Service may remain during EKS teardown and interfere with VPC deletion.
