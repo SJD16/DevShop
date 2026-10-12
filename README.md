@@ -18,7 +18,7 @@ This is a functional demonstration environment, not a production system.
 
 The AWS phase runs FastAPI and PostgreSQL on Amazon EKS. PostgreSQL is a single-replica StatefulSet using a PVC backed by EBS gp3. Jenkins builds and scans the image, publishes it to Docker Hub, and commits its image tag to Git; Argo CD synchronizes that Git state to Kubernetes.
 
-See the [AWS architecture](docs/architecture/aws-architecture.md) and its [network flow](Diagrams/AWS/Networking_flow.md).
+See the [AWS architecture](docs/architecture/aws-architecture.md) and its [network flow](Diagrams/AWS/Networking_flow.png).
 
 ## Technology Stack
 
@@ -26,11 +26,11 @@ FastAPI, SQLAlchemy, Alembic, PostgreSQL, pytest, Docker, Jenkins, Trivy, Kubern
 
 ## AWS Infrastructure
 
-Terraform composes VPC, EKS, Jenkins, Argo CD, and secrets-store modules through the `dev` environment. The EKS node group uses public subnets in the current configuration. The VPC module also declares private subnets, but does not configure private egress. See [AWS deployment](docs/deployment/aws-deployment.md) and the [Terraform infrastructure diagram](Diagrams/AWS/Terraform_infrastructure.md).
+Terraform composes VPC, EKS, Jenkins, Argo CD, and secrets-store modules through the `dev` environment. The EKS node group uses public subnets in the current configuration. The VPC module also declares private subnets, but does not configure private egress. See [AWS deployment](docs/deployment/aws-deployment.md) and the [Terraform infrastructure diagram](Diagrams/AWS/Terraform_infrastructure.png).
 
 ## CI/CD + GitOps
 
-Jenkins runs the Python checks against PostgreSQL, builds and validates a Docker image, scans it with Trivy, publishes it to Docker Hub, then commits the new image tag to the repository. Argo CD watches the configured Git path and synchronizes the Kubernetes manifests. See the [CI/CD + GitOps flow](Diagrams/AWS/CD_+_GitOps_flow.md).
+Jenkins runs the Python checks against PostgreSQL, builds and validates a Docker image, scans it with Trivy, publishes it to Docker Hub, then commits the new image tag to the repository. Argo CD watches the configured Git path and synchronizes the Kubernetes manifests. See the [CI/CD + GitOps flow](Diagrams/AWS/CD_+_GitOps_flow.png).
 
 ## Security
 
