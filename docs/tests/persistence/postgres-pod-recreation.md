@@ -2,7 +2,7 @@
 
 This test verifies that a known product record survives deletion and recreation of the PostgreSQL pod. It deliberately deletes only the pod. Do not use it to infer safety of deleting the PVC, PV, EBS volume, or cluster.
 
-The recorded execution passed; see [INC-011](../../incidents/INC-011-postgresql-persistence-test.md). The data path is shown in the [PostgreSQL persistence diagram](../../../Diagrams/AWS/PostgreSQL_persistence.md).
+The recorded execution passed; see [INC-011](../../incidents/INC-011-postgresql-persistence-test.md). The data path is shown in the [PostgreSQL persistence diagram](../../../Diagrams/AWS/PostgreSQL_persistence.png).
 
 ## Preconditions
 
